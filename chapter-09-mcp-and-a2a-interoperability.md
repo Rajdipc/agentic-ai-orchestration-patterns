@@ -4,7 +4,7 @@
 
 ---
 
-Before standardized protocols, connecting $N$ agent frameworks (Google ADK, LangGraph, CrewAI, IDE assistants) to $M$ enterprise systems (Postgres, GitHub, Jira, BigQuery, Slack) required writing $N \times M$ bespoke integration wrappers.
+Before standardized protocols, connecting $N$ agent frameworks (LangGraph, CrewAI, OpenAI Agents SDK, Google ADK, IDE assistants) to $M$ enterprise systems (Postgres, GitHub, Jira, a data warehouse such as Snowflake or BigQuery, Slack) required writing $N \times M$ bespoke integration wrappers.
 
 Today, two complementary open standards greatly reduce this fragmentation:
 1. **MCP (Model Context Protocol):** Standardizes **Vertical Integration** (**Agent $\leftrightarrow$ Tools, Resources, & Prompts**).
@@ -33,12 +33,12 @@ flowchart LR
     end
 
     C1 <-->|"JSON-RPC 2.0 (stdio)"| S1["Git & Local FS MCP Server"]
-    C2 <-->|"JSON-RPC 2.0 (Streamable HTTP)"| S2["Postgres / BigQuery MCP Server"]
+    C2 <-->|"JSON-RPC 2.0 (Streamable HTTP)"| S2["Postgres / Data Warehouse MCP Server"]
     C3 <-->|"JSON-RPC 2.0 (Streamable HTTP)"| S3["Issue Tracker / Slack MCP Server"]
 ```
 
 ### The Three MCP Participants
-1. **MCP Host:** The AI application or agent runtime (e.g., an ADK agent service, Claude Desktop, Claude Code, Gemini CLI, VS Code, Cursor) that coordinates the LLM and manages permissions and user consent.
+1. **MCP Host:** The AI application or agent runtime (e.g., a custom agent service built with any framework, Claude Desktop, Claude Code, ChatGPT, Gemini CLI, VS Code, Cursor) that coordinates the LLM and manages permissions and user consent.
 2. **MCP Client:** A protocol connector instantiated inside the Host that maintains a dedicated **1-to-1 connection** with a single MCP Server.
 3. **MCP Server:** A program (local or remote) that exposes capabilities from a data source or API over JSON-RPC 2.0.
 
@@ -61,7 +61,7 @@ A crucial beginner concept is that MCP is **not just for tool calling**. An MCP 
 ### 1. MCP Transport Layers (`stdio` vs. `Streamable HTTP`)
 MCP separates its JSON-RPC 2.0 message layer from the underlying transport mechanism:
 * **`stdio` (Standard Input/Output):** The Host spawns the MCP Server as a local child process (`npx`, `uvx`, or a local Go/Python binary) and exchanges newline-delimited JSON-RPC messages over `stdin`/`stdout` (logs go to `stderr`). Ideal for local developer tools, CLI wrappers, and zero-network-latency sandboxes.
-* **`Streamable HTTP` (introduced in spec `2025-03-26`, replacing the legacy HTTP+SSE transport, which is now formally deprecated):** The MCP Server runs as a remote service (e.g., on Cloud Run or GKE) exposing a single HTTP endpoint (e.g., `/mcp`). Each client message is an `HTTP POST`; the server replies either with a plain `application/json` body or with a request-scoped `text/event-stream` (SSE) stream for progress notifications and incremental results.
+* **`Streamable HTTP` (introduced in spec `2025-03-26`, replacing the legacy HTTP+SSE transport, which is now formally deprecated):** The MCP Server runs as a remote service (e.g., on Kubernetes or a serverless container platform such as AWS Fargate, Azure Container Apps, or Cloud Run) exposing a single HTTP endpoint (e.g., `/mcp`). Each client message is an `HTTP POST`; the server replies either with a plain `application/json` body or with a request-scoped `text/event-stream` (SSE) stream for progress notifications and incremental results.
   * **Through `2025-11-25`:** the server could assign an `Mcp-Session-Id` header (sticky sessions), clients could open a `GET` SSE stream for server-initiated messages, and HTTP requests carried an `MCP-Protocol-Version` header.
   * **Since `2026-07-28`:** the protocol is **stateless**. Protocol-level sessions and `Mcp-Session-Id` are gone, so servers can sit behind a plain round-robin load balancer. POSTs carry routing headers (`Mcp-Method`, `Mcp-Name`) that gateways can authorize at the edge, and opt-in change notifications use a long-lived `subscriptions/listen` stream. Servers that need cross-call state mint explicit handles and pass them as ordinary tool arguments.
 
@@ -180,13 +180,13 @@ Connecting agents to third-party MCP servers creates several attack vectors that
 
 A common architectural question is: *"If I have MCP, why do I need A2A (Agent2Agent Protocol)?"*
 * **Why Tools (MCP) Are Not Agents:** A tool is a **bounded capability with a fixed, schema-defined contract** (`query_database(sql) -> rows`). The *caller's* LLM does all the reasoning and decides what to do with the result. Tools can be stateful or slow, but they don't negotiate. A remote **Agent** is an **autonomous, often long-running reasoning partner**. It may take 10 minutes, ask clarifying questions mid-task, negotiate output formats, and orchestrate its own private sub-agents and tools, all without ever exposing its internal prompts, memory, or credentials to the caller (**opacity**).
-* **The line is blurring:** Many frameworks let you wrap an agent *as* a tool (e.g., ADK's `AgentTool`, or an agent exposed behind an MCP server), and MCP Tasks/elicitation add some long-running, interactive behavior. A practical rule: use **MCP** when you control the reasoning and need capabilities, and use **A2A** when you delegate a goal to an independently owned and operated agent.
+* **The line is blurring:** Many frameworks let you wrap an agent *as* a tool (e.g., the OpenAI Agents SDK's `Agent.as_tool()`, Google ADK's `AgentTool`, or an agent exposed behind an MCP server), and MCP Tasks/elicitation add some long-running, interactive behavior. A practical rule: use **MCP** when you control the reasoning and need capabilities, and use **A2A** when you delegate a goal to an independently owned and operated agent.
 
 ```mermaid
 flowchart TD
     subgraph ClientOrg["Domain A: Customer Support Organization (Google ADK)"]
         Sup["Support Coordinator Agent"]
-        Sup <-->|"MCP (Vertical: Agent-to-Tool)"| MCP_Logs["MCP Server:<br/>Cloud Logging & K8s"]
+        Sup <-->|"MCP (Vertical: Agent-to-Tool)"| MCP_Logs["MCP Server:<br/>Log Platform & K8s"]
     end
 
     subgraph PartnerOrg["Domain B: Finance & Billing Organization (LangGraph)"]

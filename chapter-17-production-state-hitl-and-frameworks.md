@@ -4,7 +4,7 @@
 
 ---
 
-This chapter synthesizes our orchestration topologies (Chapters 1–5) and capability pillars (Chapters 6–16) into production state management, durable Human-in-the-Loop (HITL) checkpointing, the **Master Architecture Decision Matrix**, and concrete code mappings across **Google ADK**, **LangGraph**, **CrewAI**, **Microsoft Agent Framework** (plus its predecessor AutoGen and the community fork **AG2**), **OpenAI Agents SDK**, and the **Claude Agent SDK**.
+This chapter synthesizes our orchestration topologies (Chapters 1–5) and capability pillars (Chapters 6–16) into production state management, durable Human-in-the-Loop (HITL) checkpointing, the **Master Architecture Decision Matrix**, and concrete code mappings across **LangGraph**, **CrewAI**, **Microsoft Agent Framework** (plus its predecessor AutoGen and the community fork **AG2**), **OpenAI Agents SDK**, the **Claude Agent SDK**, and **Google ADK**. The patterns themselves are framework-, model-, and cloud-agnostic; the frameworks are just different APIs over them.
 
 > [!NOTE]
 > Framework APIs move fast. The idioms below reflect the frameworks' public docs as of late 2026, but always pin versions and confirm exact signatures in the official docs before copying code into production.
@@ -27,7 +27,7 @@ When Agent A transitions to Agent B, **what exact tokens should enter Agent B's 
 
 ```mermaid
 flowchart LR
-    subgraph ArtifactStore["Out-of-Band Artifact Store (GCS / S3 / Redis)"]
+    subgraph ArtifactStore["Out-of-Band Artifact Store (Object Storage: S3 / Azure Blob / GCS / MinIO, or Redis)"]
         Blob["blob://run_902/raw_503_logs.json<br/>(75,000 tokens)"]
     end
 
@@ -57,7 +57,7 @@ Production orchestrators implement **Durable Checkpointing & Interrupts**:
 ```mermaid
 sequenceDiagram
     participant Worker as Stateless Agent Worker
-    participant DB as Durable Checkpoint Store (Postgres / Spanner)
+    participant DB as Durable Checkpoint Store (Postgres / DynamoDB / Cosmos DB / Spanner)
     participant Queue as Event Notification (Slack / UI)
     participant Human as Human Reviewer
     participant API as Orchestrator Resume API
@@ -81,15 +81,16 @@ sequenceDiagram
 * **Resumption may re-execute code.** Many engines resume at the *node/step* boundary, not the exact line. In LangGraph, for example, resuming after `interrupt()` re-runs the interrupted node from its first line, so any side effect placed *before* the `interrupt()` call executes twice. Put side effects in a separate node after the approval, or make them idempotent.
 * **Idempotency keys on every mutating tool.** Workers crash, messages are redelivered, and humans double-click "Approve". Pass a deterministic key (e.g., `thread_id + step`) to payment, ticketing, and infra APIs so a retried call cannot refund twice.
 * **Time-travel forks state, not the world.** Replaying from Checkpoint 4 rewinds *your* state; a refund already issued or an email already sent in the abandoned branch is not undone. Treat external effects as committed and use compensating actions (the Saga pattern) when you need to "undo".
-* **Checkpointers vs. durable-execution engines.** Framework checkpointers (LangGraph checkpointers, ADK resumable apps, OpenAI Agents SDK `RunState` serialization, CrewAI `@persist`) persist *agent state* between steps. For long-running business processes with timers, retries, and cross-service transactions, teams often run the agent loop inside a general durable-execution engine (e.g., Temporal, Restate, DBOS, AWS Step Functions), which records each step's result and recovers from crashes without redoing completed steps.
+* **Checkpointers vs. durable-execution engines.** Framework checkpointers (LangGraph checkpointers, OpenAI Agents SDK `RunState` serialization, CrewAI `@persist`, Microsoft Agent Framework workflow checkpoints, ADK resumable apps) persist *agent state* between steps. For long-running business processes with timers, retries, and cross-service transactions, teams often run the agent loop inside a general durable-execution engine (e.g., Temporal, Restate, DBOS, AWS Step Functions, Azure Durable Functions), which records each step's result and recovers from crashes without redoing completed steps.
 * **Approval fatigue is a security risk.** If reviewers see dozens of low-risk prompts per hour, they rubber-stamp. Gate only on risk (amount thresholds, irreversible verbs, external recipients), and show the reviewer the exact arguments and a diff, not the agent's persuasive summary.
 
 | Framework | Native HITL Mechanism (late 2026) |
 | :--- | :--- |
 | **LangGraph** | `interrupt(payload)` inside a node (requires a checkpointer + `thread_id`); resume with `graph.invoke(Command(resume=value), config)`. Static breakpoints via `interrupt_before` / `interrupt_after` at compile time. |
-| **Google ADK** | Tool confirmation via `FunctionTool(func, require_confirmation=...)` (a bool or a predicate over the arguments), `LongRunningFunctionTool` for async external work, and app-level resumability (`ResumabilityConfig`) so a paused invocation can resume later. |
 | **OpenAI Agents SDK** | `@function_tool(needs_approval=...)`; the run surfaces `result.interruptions`, you call `state = result.to_state()`, then `state.approve(...)` / `state.reject(...)`, and resume with `Runner.run(agent, state)`. `RunState` can be serialized for cross-process resumes. |
 | **Claude Agent SDK** | Permission modes plus a `can_use_tool` callback and `PreToolUse` hooks that can allow, deny, or modify a tool call before it executes. |
+| **Microsoft Agent Framework** | Tools can be marked `approval_mode="always_require"` so the run pauses with an approval request instead of executing; graph Workflows add human-in-the-loop request/response steps plus checkpointing for resume. |
+| **Google ADK** | Tool confirmation via `FunctionTool(func, require_confirmation=...)` (a bool or a predicate over the arguments), `LongRunningFunctionTool` for async external work, and app-level resumability (`ResumabilityConfig`) so a paused invocation can resume later. |
 
 ---
 
@@ -150,58 +151,11 @@ Let $L$ be the average latency of a single LLM call, $K$ be the number of loop i
 
 ## 17.5 Deep-Dive Framework Survey: Mapping Concepts to Real Code Idioms
 
-Once you understand the conceptual patterns, every major framework is simply a different ergonomic API over **Agents**, **Control Edges**, and **Shared State**. Below is how six widely used frameworks implement these patterns in practice.
+Once you understand the conceptual patterns, every major framework is simply a different ergonomic API over **Agents**, **Control Edges**, and **Shared State**. Below is how six widely used frameworks implement these patterns in practice (listed in no order of preference). Other capable options include LlamaIndex (Workflows / `AgentWorkflow`), Pydantic AI, AWS's open-source Strands Agents SDK, and Mastra (TypeScript); the same concept-to-idiom mapping applies.
 
 ---
 
-### 1. Google ADK (Agent Development Kit)
-* **Core Philosophy:** Composable hierarchy combining **Deterministic Workflow Agents** (`SequentialAgent`, `ParallelAgent`, `LoopAgent`) with dynamic **`LlmAgent`** nodes (also exported as `Agent`), shared `session.state`, and native **MCP + A2A** support.
-* **Key Architectural Idioms:**
-  1. **State Piping via `output_key`:** When an `LlmAgent` defines `output_key="rca_report"`, ADK automatically writes its final response into `session.state["rca_report"]`, which a later agent in a `SequentialAgent` can reference directly in its instruction template (`{rca_report}`).
-  2. **Deterministic Orchestration Containers:** `SequentialAgent`, `ParallelAgent`, and `LoopAgent` execute without spending an LLM call on orchestration routing. A `LoopAgent` stops at `max_iterations` or when a sub-agent escalates (e.g., a checker tool sets `tool_context.actions.escalate = True`). Sub-agents of a `ParallelAgent` share the same `session.state`, so give each a distinct `output_key` to avoid clobbering.
-  3. **Two Dynamic Delegation Modes:**
-     * **Peer Handoffs (`sub_agents`):** Passing `sub_agents=[infra_agent, billing_agent]` to an `LlmAgent` lets the model call the built-in `transfer_to_agent` function; control (and subsequent turns) moves to the target agent.
-     * **Supervisor (`AgentTool`):** Wrapping a specialist with `AgentTool(agent=infra_agent)` lets a Supervisor call the sub-agent like a standard function and get the result back, keeping control.
-  4. **Custom Orchestration (`BaseAgent`):** Subclassing `BaseAgent` and implementing `async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]` allows arbitrary Python control flow (e.g., Blackboard controllers or dynamic Map-Reduce).
-  5. **Callbacks & Plugins (Guardrails / Policy):** Per-agent callbacks (`before_agent_callback`, `before_model_callback`, `before_tool_callback`, and their `after_*` counterparts) can inspect, modify, or short-circuit a step. **Plugins** (`BasePlugin` subclasses registered on the `Runner`/`App`) apply the same kind of hooks globally across every agent, which is the right home for audit logging, PII redaction, and tool-permission policies.
-  6. **HITL & Deployment:** Tool confirmation (`require_confirmation`) plus resumable apps cover durable approvals (see 17.2). `adk web` / `adk eval` give a local dev UI and trajectory evals; `adk deploy` targets Cloud Run, GKE, or Google Cloud's managed agent runtime (formerly *Vertex AI Agent Engine*, now branded **Agent Runtime** in the Gemini Enterprise Agent Platform).
-
-```python
-from google.adk.agents import LlmAgent, SequentialAgent, ParallelAgent
-from google.adk.tools.agent_tool import AgentTool
-
-# Placeholders: query_logs, get_deploys, check_sla_policy are plain Python functions
-# (ADK wraps them as FunctionTools); human_escalation_agent is another LlmAgent.
-FAST_MODEL = "gemini-flash-latest"   # rolling alias; pin a validated version in production
-SMART_MODEL = "gemini-pro-latest"
-
-# 1. Specialist Agents writing to session.state via output_key
-log_agent = LlmAgent(name="LogAgent", model=FAST_MODEL, tools=[query_logs], output_key="log_findings")
-deploy_agent = LlmAgent(name="DeployAgent", model=FAST_MODEL, tools=[get_deploys], output_key="deploy_findings")
-
-# 2. Pattern 2.2 (Parallel Fan-Out) -> Pattern 2.1 (Sequential Pipeline)
-parallel_diag = ParallelAgent(name="ParallelDiagnostics", sub_agents=[log_agent, deploy_agent])
-sla_agent = LlmAgent(
-    name="SLAAgent",
-    model=SMART_MODEL,
-    instruction="Given {log_findings} and {deploy_findings}, check SLA policy.",
-    tools=[check_sla_policy],
-)
-incident_pipeline = SequentialAgent(name="IncidentPipeline", sub_agents=[parallel_diag, sla_agent])
-
-# 3. Pattern 3.3 (Supervisor via AgentTool) AND Pattern 4.1 (Handoff via sub_agents)
-supervisor = LlmAgent(
-    name="SupportSupervisor",
-    model=SMART_MODEL,
-    instruction="Diagnose incidents with the IncidentPipeline tool; transfer to a human if policy requires it.",
-    tools=[AgentTool(agent=incident_pipeline)],  # Calls the pipeline as a scoped tool; control returns here.
-    sub_agents=[human_escalation_agent],         # Or hands off control entirely via transfer_to_agent.
-)
-```
-
----
-
-### 2. LangGraph (LangChain Ecosystem)
+### 1. LangGraph (LangChain Ecosystem)
 * **Core Philosophy:** Low-level, graph-based state machine (`StateGraph`, cycles allowed) with explicit **Typed State Reducers**, first-class durable **Checkpointers**, and dynamic `Send` / `Command` primitives. LangGraph reached a stable **1.0** in late 2025; LangChain's higher-level `create_agent` is built on top of it.
 * **Key Architectural Idioms:**
   1. **Typed State Reducers (`Annotated[list, operator.add]`):** When parallel nodes run in the same step, returning `{"reports": [new_item]}` from each is merged by the reducer instead of one branch overwriting the other. (Without a reducer, concurrent writes to the same key raise an `InvalidUpdateError`.)
@@ -263,14 +217,14 @@ graph.invoke(Command(resume={"approved": True}), config)      # Later, from any 
 
 ---
 
-### 3. CrewAI (`Crews` + `Flows`)
+### 2. CrewAI (`Crews` + `Flows`)
 * **Core Philosophy:** Two-layer architecture combining **CrewAI Flows** (deterministic, event-driven workflows using `@start`, `@listen`, `@router`, and the `and_` / `or_` combinators over a typed Pydantic state, `Flow[MyState]`) on the outside with **Crews** (collaborative role-playing agent teams run with `Process.sequential` or `Process.hierarchical`, where a manager agent delegates and validates) on the inside.
 * **Production Notes:** Use Flows as the backbone and call Crews only for the steps that need autonomous collaboration; the `@persist` decorator saves Flow state (SQLite by default) so a run can resume after a restart.
 * **Best For:** Teams that want declarative YAML definitions of `Agents` (`role`, `goal`, `backstory`) and `Tasks` (`description`, `expected_output`, `context`) wrapped inside event-driven Python workflows.
 
 ---
 
-### 4. Microsoft Agent Framework (successor to AutoGen + Semantic Kernel) & the AG2 Fork
+### 3. Microsoft Agent Framework (successor to AutoGen + Semantic Kernel) & the AG2 Fork
 Three related but **different** codebases are often conflated:
 
 | Project | Status (late 2026) | Multi-Agent Idioms |
@@ -283,7 +237,7 @@ Three related but **different** codebases are often conflated:
 
 ---
 
-### 5. OpenAI Agents SDK (Production Successor to Swarm)
+### 4. OpenAI Agents SDK (Production Successor to Swarm)
 * **Core Philosophy:** Minimal, Python-first library (a TypeScript SDK also exists) with very few new abstractions: use standard Python `for`, `if/else`, and `asyncio.gather` for deterministic workflows, and a small set of primitives for multi-agent orchestration:
   1. **`handoffs=[billing_agent, infra_agent]`** for Peer-to-Peer control transfer (Pattern 4.1). Each handoff is exposed to the model as a tool (e.g., `transfer_to_billing_agent`); `handoff(..., input_filter=...)` controls what history the next agent sees.
   2. **`agent.as_tool(tool_name=..., tool_description=...)`** for Hierarchical Supervisor delegation (Pattern 3.3): the sub-agent runs and returns its output, and the caller keeps control.
@@ -313,10 +267,60 @@ async def handle(user_id: str, message: str):
 
 ---
 
-### 6. Claude Agent SDK (Anthropic)
+### 5. Claude Agent SDK (Anthropic)
 * **Core Philosophy:** The agent harness behind Claude Code, exposed as a library (renamed from the *Claude Code SDK* in 2025). Instead of composing graphs, you configure **one capable agent loop** with built-in tools (file operations, shell, web search/fetch), custom tools, and MCP servers, then delegate noisy sub-tasks to **subagents** that run in their own context windows and return only a summary (Pattern 3.3 with automatic context isolation).
-* **Key Idioms:** `query()` for one-shot streaming runs and `ClaudeSDKClient` for multi-turn sessions; `ClaudeAgentOptions` for allowed tools, system prompt, MCP servers, and subagent definitions; **hooks** (`PreToolUse`, `PostToolUse`, etc.) for deterministic policy enforcement; permission modes plus a `can_use_tool` callback for HITL approvals; support for **Agent Skills** (`SKILL.md`, see [Chapter 8](./chapter-08-agent-skills-and-procedural-memory.md)) and automatic context compaction for long-running tasks.
+* **Key Idioms:** `query()` for one-shot streaming runs and `ClaudeSDKClient` for multi-turn sessions; `ClaudeAgentOptions` for allowed tools, system prompt, MCP servers, and subagent definitions; **hooks** (`PreToolUse`, `PostToolUse`, etc.) for deterministic policy enforcement; permission modes plus a `can_use_tool` callback for HITL approvals; support for **Agent Skills** (`SKILL.md`, see [Chapter 8](./chapter-08-agent-skills-and-procedural-memory.md)) and automatic context compaction for long-running tasks. Claude models can be served via Anthropic's API or through Amazon Bedrock, Google Vertex AI, or Microsoft Foundry.
 * **Best For:** Long-horizon, tool-heavy "computer-like" agents (coding, research, ops runbooks) where a single strong agent with good context management beats a hand-built multi-agent graph.
+
+---
+
+### 6. Google ADK (Agent Development Kit)
+* **Core Philosophy:** Composable hierarchy combining **Deterministic Workflow Agents** (`SequentialAgent`, `ParallelAgent`, `LoopAgent`) with dynamic **`LlmAgent`** nodes (also exported as `Agent`), shared `session.state`, and native **MCP + A2A** support.
+* **Key Architectural Idioms:**
+  1. **State Piping via `output_key`:** When an `LlmAgent` defines `output_key="rca_report"`, ADK automatically writes its final response into `session.state["rca_report"]`, which a later agent in a `SequentialAgent` can reference directly in its instruction template (`{rca_report}`).
+  2. **Deterministic Orchestration Containers:** `SequentialAgent`, `ParallelAgent`, and `LoopAgent` execute without spending an LLM call on orchestration routing. A `LoopAgent` stops at `max_iterations` or when a sub-agent escalates (e.g., a checker tool sets `tool_context.actions.escalate = True`). Sub-agents of a `ParallelAgent` share the same `session.state`, so give each a distinct `output_key` to avoid clobbering.
+  3. **Two Dynamic Delegation Modes:**
+     * **Peer Handoffs (`sub_agents`):** Passing `sub_agents=[infra_agent, billing_agent]` to an `LlmAgent` lets the model call the built-in `transfer_to_agent` function; control (and subsequent turns) moves to the target agent.
+     * **Supervisor (`AgentTool`):** Wrapping a specialist with `AgentTool(agent=infra_agent)` lets a Supervisor call the sub-agent like a standard function and get the result back, keeping control.
+  4. **Custom Orchestration (`BaseAgent`):** Subclassing `BaseAgent` and implementing `async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]` allows arbitrary Python control flow (e.g., Blackboard controllers or dynamic Map-Reduce).
+  5. **Callbacks & Plugins (Guardrails / Policy):** Per-agent callbacks (`before_agent_callback`, `before_model_callback`, `before_tool_callback`, and their `after_*` counterparts) can inspect, modify, or short-circuit a step. **Plugins** (`BasePlugin` subclasses registered on the `Runner`/`App`) apply the same kind of hooks globally across every agent, which is the right home for audit logging, PII redaction, and tool-permission policies.
+  6. **HITL & Deployment:** Tool confirmation (`require_confirmation`) plus resumable apps cover durable approvals (see 17.2). `adk web` / `adk eval` give a local dev UI and trajectory evals. An ADK agent is an ordinary application service, so you can containerize it and run it on any Kubernetes cluster or serverless container platform (AWS Fargate, Azure Container Apps, Cloud Run, etc.); `adk deploy` adds one-command targets for Google Cloud (Cloud Run, GKE, or Google's managed agent runtime, formerly *Vertex AI Agent Engine* and now branded **Agent Runtime** in the Gemini Enterprise Agent Platform).
+
+```python
+from google.adk.agents import LlmAgent, SequentialAgent, ParallelAgent
+from google.adk.tools.agent_tool import AgentTool
+
+# Placeholders: query_logs, get_deploys, check_sla_policy are plain Python functions
+# (ADK wraps them as FunctionTools); human_escalation_agent is another LlmAgent.
+# Model IDs are placeholders for a fast/small tier and a frontier tier. ADK accepts Gemini
+# model IDs as plain strings and other providers' models (OpenAI, Anthropic, Bedrock,
+# Ollama, ...) via its LiteLlm wrapper, e.g. LiteLlm(model="<provider>/<model>").
+FAST_MODEL = "<fast-small-model-id>"   # pin a validated version in production
+SMART_MODEL = "<frontier-model-id>"
+
+# 1. Specialist Agents writing to session.state via output_key
+log_agent = LlmAgent(name="LogAgent", model=FAST_MODEL, tools=[query_logs], output_key="log_findings")
+deploy_agent = LlmAgent(name="DeployAgent", model=FAST_MODEL, tools=[get_deploys], output_key="deploy_findings")
+
+# 2. Pattern 2.2 (Parallel Fan-Out) -> Pattern 2.1 (Sequential Pipeline)
+parallel_diag = ParallelAgent(name="ParallelDiagnostics", sub_agents=[log_agent, deploy_agent])
+sla_agent = LlmAgent(
+    name="SLAAgent",
+    model=SMART_MODEL,
+    instruction="Given {log_findings} and {deploy_findings}, check SLA policy.",
+    tools=[check_sla_policy],
+)
+incident_pipeline = SequentialAgent(name="IncidentPipeline", sub_agents=[parallel_diag, sla_agent])
+
+# 3. Pattern 3.3 (Supervisor via AgentTool) AND Pattern 4.1 (Handoff via sub_agents)
+supervisor = LlmAgent(
+    name="SupportSupervisor",
+    model=SMART_MODEL,
+    instruction="Diagnose incidents with the IncidentPipeline tool; transfer to a human if policy requires it.",
+    tools=[AgentTool(agent=incident_pipeline)],  # Calls the pipeline as a scoped tool; control returns here.
+    sub_agents=[human_escalation_agent],         # Or hands off control entirely via transfer_to_agent.
+)
+```
 
 ---
 
@@ -324,15 +328,15 @@ async def handle(user_id: str, message: str):
 
 | Your Team's Primary Requirement | Recommended Framework | Why |
 | :--- | :--- | :--- |
-| **Google Cloud / Gemini-native deployment, clean hierarchical + deterministic composition (`Sequential`/`Parallel`/`Loop`), and native A2A + MCP** | **Google ADK** | Purpose-built for composable agent hierarchies, deterministic workflow containers, callbacks/plugins for policy, built-in trajectory evaluation, and `adk deploy` to Cloud Run, GKE, or Google's managed Agent Runtime (formerly Vertex AI Agent Engine). Model-agnostic via LiteLLM and other model connectors. |
 | **Complex cyclic graphs, custom Blackboard state machines, fine-grained time-travel checkpointing, and model-agnostic flexibility** | **LangGraph** | Exposes the raw state-machine primitives (`StateGraph`, Reducers, `Send`, `Command`, `interrupt`) without opinionated role wrappers. |
 | **Rapid role-based prototyping (Researcher + Analyst + Writer) with declarative YAML configs** | **CrewAI** | Fastest path from role/task mental model to working multi-agent prototype using `Flows` + `Crews`. |
-| **Azure / .NET / Python enterprise shops needing group chats, Magentic-style ledger orchestration, or graph workflows with checkpointing** | **Microsoft Agent Framework** (migrate from AutoGen/Semantic Kernel; AG2 if you prefer the community fork) | Unifies AutoGen's multi-agent patterns with Semantic Kernel's enterprise features (telemetry, type safety, connectors) in one supported SDK. |
+| **.NET / Python enterprise shops (often Microsoft- or Azure-aligned) needing group chats, Magentic-style ledger orchestration, or graph workflows with checkpointing** | **Microsoft Agent Framework** (migrate from AutoGen/Semantic Kernel; AG2 if you prefer the community fork) | Unifies AutoGen's multi-agent patterns with Semantic Kernel's enterprise features (telemetry, type safety, connectors) in one supported SDK. |
 | **Lightweight Python-first codebase with minimal framework lock-in and fast peer-to-peer handoffs** | **OpenAI Agents SDK** | Small surface area; standard Python handles workflows while `handoffs`, `as_tool()`, guardrails, sessions, and tracing cover the rest. Works with non-OpenAI models via LiteLLM or other model providers. |
 | **A single long-horizon, tool-heavy agent (coding, research, ops) with strong context management and deterministic hooks** | **Claude Agent SDK** | Production-tested agent harness with subagents, hooks, permissions, MCP, and Skills out of the box. |
+| **Clean hierarchical + deterministic composition (`Sequential`/`Parallel`/`Loop`) and native A2A + MCP** | **Google ADK** | Purpose-built for composable agent hierarchies, deterministic workflow containers, callbacks/plugins for policy, and built-in trajectory evaluation. Model-agnostic via LiteLLM and other model connectors; runs on any container platform, with one-command `adk deploy` targets if you are on Google Cloud (Cloud Run, GKE, or the managed Agent Runtime, formerly Vertex AI Agent Engine). |
 
 > [!TIP]
-> You rarely have to bet the whole system on one framework. Because these frameworks increasingly speak **MCP** (agent-to-tool) and **A2A** (agent-to-agent) ([Chapter 9](./chapter-09-mcp-and-a2a-interoperability.md)), a LangGraph workflow can call an ADK agent exposed over A2A, and every framework can share the same MCP tool servers. Pick per component, keep your **state schema, evals, and traces** framework-neutral, and the switching cost stays low.
+> You rarely have to bet the whole system on one framework. Because these frameworks increasingly speak **MCP** (agent-to-tool) and **A2A** (agent-to-agent) ([Chapter 9](./chapter-09-mcp-and-a2a-interoperability.md)), a LangGraph workflow can call a Microsoft Agent Framework or ADK agent exposed over A2A, and every framework can share the same MCP tool servers. Pick per component, keep your **state schema, evals, and traces** framework-neutral, and the switching cost stays low.
 
 ---
 

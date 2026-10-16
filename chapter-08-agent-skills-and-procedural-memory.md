@@ -17,7 +17,7 @@ When teams first build an agent, they put all instructions into a single `system
 3. **Zero Reusability:** You cannot share a 40,000-token monolithic prompt cleanly across different agents or teams.
 
 ### The Solution: Modular Agent Skills (the Open `SKILL.md` Format)
-An **Agent Skill** is a self-contained folder packaging **procedural instructions (`SKILL.md`)** alongside optional **helper scripts (`scripts/`)**, **deep reference docs (`references/`)**, and **static assets such as templates or golden examples (`assets/`)**. Anthropic introduced the format in October 2025 and published it as an open specification (agentskills.io) in December 2025. It has since been adopted by many agent harnesses, including Claude Code, OpenAI Codex, GitHub Copilot, Cursor, Gemini CLI, and Google ADK (via `SkillToolset`), so a well-written skill is portable across tools.
+An **Agent Skill** is a self-contained folder packaging **procedural instructions (`SKILL.md`)** alongside optional **helper scripts (`scripts/`)**, **deep reference docs (`references/`)**, and **static assets such as templates or golden examples (`assets/`)**. Anthropic introduced the format in October 2025 and published it as an open specification (agentskills.io) in December 2025. It has since been adopted by many agent harnesses, including coding agents such as Claude Code, OpenAI Codex, GitHub Copilot, Cursor and Gemini CLI, and agent frameworks such as Google ADK (via `SkillToolset`), so a well-written skill is portable across tools.
 
 ```text
 skills/
@@ -77,7 +77,7 @@ Format the final report using `assets/postmortem_template.md`.
 
 ## 8.2 Intermediate: Progressive Disclosure & Context Economics
 
-The core design principle of Agent Skills (implemented in Claude Code, Gemini CLI, Google ADK, OpenAI Codex, and other harnesses that support the format) is **3-Tier Progressive Disclosure**.
+The core design principle of Agent Skills (implemented in Claude Code, OpenAI Codex, GitHub Copilot, Gemini CLI, and other harnesses and frameworks that support the format) is **3-Tier Progressive Disclosure**.
 
 Instead of loading all 50 playbooks upfront, the agent reveals procedural context in three tiers:
 

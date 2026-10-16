@@ -253,7 +253,8 @@ Write 1-2 sentences situating this chunk within the overall document
 async def contextualize_and_index(doc: Document):
     for chunk in recursive_split(doc.text, size=512, overlap=64):
         # The doc prefix is identical for every chunk, so prompt caching makes repeat calls cheap
-        ctx = await flash_llm.generate(CONTEXT_PROMPT.format(doc=doc.text, chunk=chunk.text), cache_prefix=True)
+        # A small/fast model tier is enough for writing situating context
+        ctx = await fast_llm.generate(CONTEXT_PROMPT.format(doc=doc.text, chunk=chunk.text), cache_prefix=True)
         enriched = f"{ctx}\n\n{chunk.text}"
         await vector_index.upsert(id=chunk.id, vector=embed(enriched), text=chunk.text, meta=doc.meta)
         await bm25_index.upsert(id=chunk.id, text=enriched)  # contextual BM25 too
@@ -307,7 +308,7 @@ async def contextualize_and_index(doc: Document):
 
 ### A.3.3 Dense Bi-Encoder Retrieval
 * **🎯 Purpose:** Semantic similarity. The query and the document are each encoded **independently** into a single vector, then compared with cosine or dot product.
-* **⚙️ Mechanism:** Document vectors are precomputed and stored in an **Approximate Nearest Neighbor (ANN)** index (HNSW graphs, IVF-PQ, or Google **ScaNN**, which is used in Vertex AI Vector Search and AlloyDB).
+* **⚙️ Mechanism:** Document vectors are precomputed and stored in an **Approximate Nearest Neighbor (ANN)** index using algorithms such as HNSW graphs, IVF-PQ, DiskANN or ScaNN. Open-source and self-hosted options (pgvector, OpenSearch, Milvus, Qdrant) and managed services (Pinecone, Azure AI Search, Amazon OpenSearch Service, Vertex AI Vector Search) all implement one or more of these.
 * **✅ Strengths:** Paraphrase, cross-lingual matching, conceptual similarity.
 * **⛔ Blind spots:** Exact identifiers, negation (*"not compatible with v2"* sits close to *"compatible with v2"*), numbers, and out-of-domain jargon. Squeezing a whole passage into **one vector** blurs passages that cover several topics.
 * **🔧 Efficiency levers:** **Matryoshka embeddings** (Kusupati et al., 2022) let you truncate vectors (for example 768 → 256 dimensions) with a small quality loss. **Scalar or binary quantization** cuts memory 4–32×, usually paired with full-precision re-scoring of the top candidates.
@@ -433,7 +434,7 @@ Retrieval is tuned for **recall** (getting the gold chunk *somewhere* into the t
 
 ### A.5.1 Cross-Encoder Reranking
 * **🎯 Purpose:** Re-score candidates with a model that reads **query and passage together**, using full cross-attention.
-* **⚙️ Mechanism:** For each of the top $N$ candidates (typically 25–100), compute `score = cross_encoder(query, passage)` and keep the top $k$ (typically 5–10). Managed options include the **Vertex AI Ranking API** and Cohere Rerank. Open-weight options include the BGE and mxbai rerankers.
+* **⚙️ Mechanism:** For each of the top $N$ candidates (typically 25–100), compute `score = cross_encoder(query, passage)` and keep the top $k$ (typically 5–10). Managed options include Cohere Rerank, Voyage AI and Jina rerankers, Amazon Bedrock rerank models and the Vertex AI Ranking API. Open-weight options include the BGE and mxbai rerankers.
 * **Why not use a cross-encoder for retrieval directly?** Nothing can be precomputed. Scoring 10M documents per query is impossible. That is why there are **two stages**: a cheap high-recall retriever followed by an expensive high-precision reranker.
 * **✅ Use when:** **Almost always.** It is usually the highest ROI single upgrade to a hybrid baseline.
 
@@ -619,12 +620,12 @@ Not all knowledge is prose. Use **the right retrieval modality for the shape of 
 ### A.8.1 Text-to-SQL / Semantic-Layer RAG ("Structured RAG")
 * **🎯 Purpose:** Answer **aggregations, filters, rankings and exact numbers** (*"P99 latency by region yesterday"*, *"top 10 customers by MRR"*). Vector search over table rows cannot do any of these.
 * **⚙️ Mechanism:** Retrieve the **relevant schema** first: table and column descriptions, a **semantic layer** of governed metric definitions, and **few-shot verified SQL examples** (a RAG step over metadata). Then generate SQL, validate it (dry run, allowlisted tables, row limits), execute it with the **user's credentials**, and summarize the results.
-* **✅ Use when:** The answer lives in a warehouse (BigQuery, AlloyDB, Postgres).
-* **⚠️ Key insight:** Text-to-SQL accuracy depends heavily on **metadata quality** (column descriptions, join paths, business glossary), for example via the Dataplex Knowledge Catalog or a semantic model. Retrieving the right schema matters more than model size.
+* **✅ Use when:** The answer lives in a warehouse or relational database (Snowflake, Databricks, BigQuery, Redshift, Postgres).
+* **⚠️ Key insight:** Text-to-SQL accuracy depends heavily on **metadata quality** (column descriptions, join paths, business glossary), for example via a data catalog (Databricks Unity Catalog, Microsoft Purview, AWS Glue Data Catalog, Google Cloud Knowledge Catalog) or a semantic layer (dbt Semantic Layer, LookML, Cube). Retrieving the right schema matters more than model size.
 
 ### A.8.2 Knowledge-Graph RAG (KG-RAG / Entity-Linked Subgraph Retrieval)
 * **🎯 Purpose:** Answer **relationship and multi-hop** questions deterministically.
-* **⚙️ Mechanism:** Link entities in the query to graph nodes, then retrieve a **k-hop subgraph** (or run a generated GQL / Cypher / SPARQL query), and serialize the triples into the context. On Google Cloud you can host this in **Spanner Graph** or **BigQuery Graph** (ISO GQL).
+* **⚙️ Mechanism:** Link entities in the query to graph nodes, then retrieve a **k-hop subgraph** (or run a generated GQL / Cypher / SPARQL query), and serialize the triples into the context. Typical hosts are graph databases such as Neo4j, Amazon Neptune, Memgraph or Spanner Graph (Gremlin is another common query language).
 * **✅ Use when:** Curated graphs already exist (service catalogs, org charts, supply chains, drug interactions).
 
 ### A.8.3 Microsoft GraphRAG (Edge et al., 2024, *"From Local to Global"*)
@@ -672,7 +673,7 @@ Enterprise knowledge sits in **PDFs with tables and charts, slide decks, screens
 
 | Pattern | Mechanism | ✅ Strengths | ⛔ Weaknesses | Use When |
 | :--- | :--- | :--- | :--- | :--- |
-| **1. Parse-to-Text (OCR / Layout Pipeline)** | Layout-aware parsing (e.g., Document AI, layout parsers) → tables as Markdown or HTML, figures captioned → standard text RAG | Reuses the whole text stack; cheap retrieval; easy citations | Parsing errors cascade; chart semantics lost; complex layouts break | Text-dominant docs with simple tables |
+| **1. Parse-to-Text (OCR / Layout Pipeline)** | Layout-aware parsing (e.g., Unstructured, Docling, LlamaParse, Azure Document Intelligence, Amazon Textract, Google Document AI) → tables as Markdown or HTML, figures captioned → standard text RAG | Reuses the whole text stack; cheap retrieval; easy citations | Parsing errors cascade; chart semantics lost; complex layouts break | Text-dominant docs with simple tables |
 | **2. Caption-then-Embed (Multi-Representation)** | A VLM writes rich descriptions of images, charts and tables → embed the descriptions → **return the original image** to a multimodal generator | Visual content becomes searchable; generator sees the real pixels | Captioning cost; caption may omit the detail the query needs | Diagram- or chart-heavy corpora |
 | **3. Native Multimodal Retrieval (e.g., ColPali, Faysse et al., 2024; multimodal embeddings)** | Embed **page images directly** (ColPali: late-interaction patch embeddings from a VLM) → retrieve pages → multimodal LLM reads the page image | **No OCR or parsing pipeline**; keeps layout, charts, fonts and visual cues | Larger index (multi-vector); page-level granularity; newer tooling | Visually rich PDFs, slides, scanned forms |
 
@@ -684,7 +685,7 @@ Enterprise knowledge sits in **PDFs with tables and charts, slide decks, screens
 ## A.10 Production Engineering: Freshness, ACLs, Caching, Security & Evaluation
 
 ### A.10.1 Freshness & Incremental Indexing
-* **Change Data Capture (CDC):** Stream document create, update and delete events (Pub/Sub, Datastream) to an indexer. **Upsert chunks by a deterministic ID** (`hash(doc_id, chunk_index, content)`), and **tombstone deleted documents** in the vector index, the BM25 index, the docstore **and any caches**.
+* **Change Data Capture (CDC):** Stream document create, update and delete events through a message bus or CDC tool (e.g., Kafka with Debezium, Amazon Kinesis, Azure Event Hubs, Google Pub/Sub) to an indexer. **Upsert chunks by a deterministic ID** (`hash(doc_id, chunk_index, content)`), and **tombstone deleted documents** in the vector index, the BM25 index, the docstore **and any caches**.
 * **Versioning:** Store `version`, `effective_from` and `superseded_by` on chunks. Default retrieval returns only the **current** version, and *"as of"* queries filter on time ([bi-temporal modeling, Chapter 11](./chapter-11-context-engineering-and-long-term-memory.md)).
 * **Embedding model upgrades:** Vectors from different models are **not comparable**. Re-embed into a **new index** (blue/green), dual-read during the migration, and cut over after evals pass.
 
@@ -713,7 +714,7 @@ Enterprise knowledge sits in **PDFs with tables and charts, slide decks, screens
 | **PII Leakage** | Sensitive data indexed by accident | Redact PII and DLP-scan at ingestion; apply retention policies to chunks |
 
 ### A.10.5 Observability: What to Log on Every Request
-`query_raw`, `query_rewritten`, `route`, `filters_applied`, `retrieved_ids + scores (per retriever)`, `fused_ranks`, `reranked_ids + scores`, `final_context_ids`, `cited_ids`, `groundedness_verdict`, `tokens_in/out`, `latency_per_stage`, `index_version`, `embedding_model_version`. Export these as **OpenTelemetry spans per stage** ([Chapter 10](./chapter-10-agentic-evaluation-and-observability.md)).
+`query_raw`, `query_rewritten`, `route`, `filters_applied`, `retrieved_ids + scores (per retriever)`, `fused_ranks`, `reranked_ids + scores`, `final_context_ids`, `cited_ids`, `groundedness_verdict`, `tokens_in/out`, `latency_per_stage`, `index_version`, `embedding_model_version`. Export these as **OpenTelemetry spans per stage** to any OTel-compatible tracing backend ([Chapter 10](./chapter-10-agentic-evaluation-and-observability.md)).
 
 ### A.10.6 Evaluating RAG: Retrieval Metrics vs. Generation Metrics
 

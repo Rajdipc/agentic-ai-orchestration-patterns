@@ -51,7 +51,7 @@ flowchart TD
 ```
 
 > [!IMPORTANT]
-> **Never inject dynamic values (timestamps, request IDs) at the top of your system prompt.** Provider prompt caches match on an **exact token prefix**: OpenAI caches automatically (prompts ≥1,024 tokens), Anthropic caches up to explicit `cache_control` breakpoints, and Gemini offers implicit and explicit context caching. Putting `Current Time: 2026-10-16T16:01:43Z` on line 1 changes the prefix on every request and **invalidates the cache for everything after it**. Keep the prefix byte-identical and put dynamic state in the suffix. The same logic applies to tools: **adding or removing tool definitions mid-session also breaks the cache**. Prefer keeping the tool list stable and constraining selection with `tool_choice`/allowed-tools settings or decoding-time masking (the "mask, don't remove" lesson from Manus).
+> **Never inject dynamic values (timestamps, request IDs) at the top of your system prompt.** Provider prompt caches match on an **exact token prefix**: OpenAI caches automatically (prompts ≥1,024 tokens), Anthropic caches up to explicit `cache_control` breakpoints, Gemini offers implicit and explicit context caching, and self-hosted engines such as vLLM and SGLang reuse the KV cache for shared prefixes. Putting `Current Time: 2026-10-16T16:01:43Z` on line 1 changes the prefix on every request and **invalidates the cache for everything after it**. Keep the prefix byte-identical and put dynamic state in the suffix. The same logic applies to tools: **adding or removing tool definitions mid-session also breaks the cache**. Prefer keeping the tool list stable and constraining selection with `tool_choice`/allowed-tools settings or decoding-time masking (the "mask, don't remove" lesson from Manus).
 
 > [!NOTE]
 > **Reasoning models change the layout slightly.** With "thinking" models (configurable thinking budgets), you rarely need hand-written chain-of-thought scaffolding in the prompt. Spend those tokens on **clear goals, constraints, and high-signal context** instead. Also check your provider's rules for carrying prior reasoning blocks across tool-use turns, since some APIs require them to be passed back unchanged.
@@ -135,18 +135,18 @@ def compact_working_context(
 
 ## 11.3 Advanced: Long-Term Cross-Session Memory Architectures
 
-When a user returns three weeks later, **Working Memory** (the session's message history and scratch state, e.g., ADK's `session.state`) is gone. How do production agents remember user preferences, architectural topology changes, and lessons from past failures across hundreds of sessions?
+When a user returns three weeks later, **Working Memory** (the session's message history and scratch state, e.g., a LangGraph thread checkpoint or ADK's `session.state`) is gone. How do production agents remember user preferences, architectural topology changes, and lessons from past failures across hundreds of sessions?
 
 ### Memory Types: A Shared Vocabulary (CoALA, Sumers et al., 2023)
 
 | Memory Type | What It Stores | Example | Typical Store |
 | :--- | :--- | :--- | :--- |
 | **Working** | The current context window and session scratch state | Last 4 turns, `todo.md` | Prompt + session store |
-| **Semantic** | Facts about the user, world, or domain | *"Checkout-service runs on Cloud Spanner"* | Profile doc, KV store, knowledge graph |
+| **Semantic** | Facts about the user, world, or domain | *"Checkout-service runs on CockroachDB"* | Profile doc, KV store, knowledge graph |
 | **Episodic** | Records of past experiences/trajectories | *"Last incident, restarting the pod didn't fix the 503s"* | Vector DB of episode summaries |
 | **Procedural** | How to do things: instructions, skills, policies | A `SKILL.md` runbook, an updated system prompt | Files / prompt registry (Chapter 8) |
 
-Most frameworks ship primitives for this. LangGraph separates **checkpointers** (per-thread short-term state) from a namespaced long-term **`Store`** (`put`/`get`/`search`). Google ADK separates `SessionService` from a `MemoryService` (`InMemoryMemoryService` for prototyping, `VertexAiMemoryBankService` for managed extraction), with `add_session_to_memory()` for ingestion and the `load_memory` / `PreloadMemoryTool` tools for recall. Anthropic's **memory tool** gives Claude a client-side, file-based `/memories` directory it can read and write across sessions.
+Most frameworks ship primitives for this. LangGraph separates **checkpointers** (per-thread short-term state) from a namespaced long-term **`Store`** (`put`/`get`/`search`). Google ADK separates `SessionService` from a `MemoryService` (`InMemoryMemoryService` for prototyping, `VertexAiMemoryBankService` for Google's managed extraction), with `add_session_to_memory()` for ingestion and the `load_memory` / `PreloadMemoryTool` tools for recall. Anthropic's **memory tool** gives Claude a client-side, file-based `/memories` directory it can read and write across sessions. Managed agent runtimes offer comparable services (Amazon Bedrock AgentCore Memory, Azure AI Foundry Agent Service memory, Vertex AI Agent Engine Memory Bank), and open-source memory layers such as **Mem0**, **Letta**, and **Zep/Graphiti** (covered below) can be self-hosted on any stack.
 
 ### Architecture 1: OS-Inspired Virtual Memory (MemGPT / Letta Pattern; Packer et al., 2023)
 Inspired by operating-system paging between fast **RAM** and large **Disk**, **MemGPT** (now the **Letta** framework) divides memory into:
@@ -157,20 +157,20 @@ Inspired by operating-system paging between fast **RAM** and large **Disk**, **M
 * **Trade-off:** Self-editing memory is flexible, but every memory operation is an extra LLM tool call, and the agent can write wrong or **attacker-injected** facts into memory (see *memory poisoning* in Chapter 12).
 
 ### Architecture 2: Bi-Temporal Knowledge Graph Memory (Solving Contradictory Facts)
-* **Why Naive Vector Memory Fails Over Time:** Suppose in January the user says *"Our checkout-service runs on Postgres 14"*, and in October they say *"We migrated checkout-service from Postgres 14 to Cloud Spanner today"*. A plain append-only vector store now contains **both** chunks, and semantic search for *"What database does checkout-service use?"* retrieves both contradictory facts.
+* **Why Naive Vector Memory Fails Over Time:** Suppose in January the user says *"Our checkout-service runs on Postgres 14"*, and in October they say *"We migrated checkout-service from Postgres 14 to CockroachDB today"*. A plain append-only vector store now contains **both** chunks, and semantic search for *"What database does checkout-service use?"* retrieves both contradictory facts.
 * **Option A: LLM-Managed Memory Updates (e.g., Mem0, Chhikara et al., 2025):** For each newly extracted fact, retrieve similar existing memories and let an LLM choose an operation: **`ADD`**, **`UPDATE`**, **`DELETE`**, or **`NOOP`**. This is simple and keeps the store compact, but it overwrites history, so you can no longer answer *"what was true in March?"*
 * **Option B: Bi-Temporal Knowledge Graph (e.g., Zep / Graphiti; Rasmussen et al., 2025):**
   * Extracts structured edges `(Entity_A, RELATIONSHIP, Entity_B)` annotated with **two timelines**: **valid time** (`t_valid` / `t_invalid`: when the fact was true in the real world) and **transaction time** (`t_created` / `t_expired`: when the system learned it and when the system retired it).
-  * When the October message arrives, an entity-resolution & contradiction-detection pass **invalidates** (rather than deletes) `(checkout-service, USES_DB, Postgres 14)` by setting `t_invalid = 2026-10-16`, and inserts `(checkout-service, USES_DB, Cloud Spanner)` with `t_valid = 2026-10-16`, `t_invalid = NULL`. Both "what is true now?" and "what was true then?" queries stay answerable.
+  * When the October message arrives, an entity-resolution & contradiction-detection pass **invalidates** (rather than deletes) `(checkout-service, USES_DB, Postgres 14)` by setting `t_invalid = 2026-10-16`, and inserts `(checkout-service, USES_DB, CockroachDB)` with `t_valid = 2026-10-16`, `t_invalid = NULL`. Both "what is true now?" and "what was true then?" queries stay answerable.
 
 ```mermaid
 flowchart LR
-    Turn["New User Turn:<br/>'We migrated checkout-service<br/>from Postgres to Spanner today'"] --> Extractor["Async Fact & Entity Extractor"]
+    Turn["New User Turn:<br/>'We migrated checkout-service<br/>from Postgres to CockroachDB today'"] --> Extractor["Async Fact & Entity Extractor"]
     Extractor --> Resolver["Contradiction & Temporal Resolver"]
 
     subgraph TemporalKG["Bi-Temporal Memory Graph"]
         OldEdge["checkout-service USES_DB Postgres 14<br/>t_valid: 2025-01-10 | t_invalid: 2026-10-16<br/>❌ Superseded (kept for history)"]
-        NewEdge["checkout-service USES_DB Cloud Spanner<br/>t_valid: 2026-10-16 | t_invalid: NULL<br/>✅ Active"]
+        NewEdge["checkout-service USES_DB CockroachDB<br/>t_valid: 2026-10-16 | t_invalid: NULL<br/>✅ Active"]
     end
 
     Resolver -- "Invalidates Old Edge" --> OldEdge
@@ -181,7 +181,7 @@ flowchart LR
 Extracting entities, checking for contradictions, and updating episodic reflections can take seconds of LLM compute per turn.
 * **Hot-Path Retrieval (Before Turn):** Load core memory and run a fast lookup (e.g., hybrid search over active graph facts, typically tens of milliseconds) and inject the results into the prompt.
 * **Hot-Path Writes (During Turn, Optional):** Let the agent call a memory tool when the user explicitly says *"remember that…"*. This gives immediate consistency but adds latency.
-* **Background Consolidation (After Turn):** Publish the completed turn transcript to an **asynchronous queue** (e.g., Pub/Sub, Celery) whose workers extract new facts, resolve temporal contradictions, and update episodic/semantic memory **off the user's critical path**.
+* **Background Consolidation (After Turn):** Publish the completed turn transcript to an **asynchronous queue** (e.g., Kafka, RabbitMQ/Celery, Amazon SQS, Azure Service Bus, Google Cloud Pub/Sub) whose workers extract new facts, resolve temporal contradictions, and update episodic/semantic memory **off the user's critical path**.
 * **Caveat (eventual consistency):** Background memory may not be ready by the very next turn. That is fine within a session, because the recent verbatim turns are still in working memory. Across sessions, design for a short consolidation lag.
 
 > [!CAUTION]

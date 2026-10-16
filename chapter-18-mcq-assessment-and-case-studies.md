@@ -279,11 +279,11 @@ When you deploy an **Evaluator–Optimizer (3.2)** pair for technical report wri
 ---
 
 ### Question 16: Hierarchical Supervisor (3.3) — Agents-as-Tools vs. Handoffs
-In a **Hierarchical Supervisor (Pattern 3.3)** architecture, what is the key behavioral difference between wrapping specialist agents as **Callable Tools (`AgentTool` / `agent.as_tool()`)** and using **Peer Handoffs (`transfer_to_agent` / handoffs)**?
+In a **Hierarchical Supervisor (Pattern 3.3)** architecture, what is the key behavioral difference between wrapping specialist agents as **Callable Tools (e.g., `agent.as_tool()` in the OpenAI Agents SDK, `AgentTool` in Google ADK)** and using **Peer Handoffs (e.g., OpenAI Agents SDK handoffs, ADK's `transfer_to_agent`)**?
 
-* **A.** With `AgentTool`, the sub-agent's full internal tool history is copied into the Supervisor's context; with a handoff, the specialist starts from an empty history.
-* **B.** With `AgentTool`, the Supervisor stays in control, calling sub-agents like functions and synthesizing their results; with a handoff, the specialist takes over.
-* **C.** `AgentTool` can only run sub-agents in parallel, while handoffs can only run them one after another.
+* **A.** With agents-as-tools, the sub-agent's full internal tool history is copied into the Supervisor's context; with a handoff, the specialist starts from an empty history.
+* **B.** With agents-as-tools, the Supervisor stays in control, calling sub-agents like functions and synthesizing their results; with a handoff, the specialist takes over.
+* **C.** Agents-as-tools can only run sub-agents in parallel, while handoffs can only run them one after another.
 * **D.** There is no behavioral difference; they are two framework names for the same delegation mechanism.
 
 > **Correct Answer:** **B**
@@ -594,7 +594,7 @@ Which of the following enterprise questions requires **GraphRAG (property-graph 
 ---
 
 ### Question 34 (Advanced): Multi-Agent Federated RAG Architecture
-An executive asks: *"Why did Q3 payment dispute volume spike after August 14, which microservices handle those dispute webhooks, and what does our Reg E compliance policy require for response times?"* Answering requires querying (1) a BigQuery analytical table, (2) a service dependency Property Graph, and (3) a vector store of PDF legal policies. What is the optimal Agentic RAG architecture?
+An executive asks: *"Why did Q3 payment dispute volume spike after August 14, which microservices handle those dispute webhooks, and what does our Reg E compliance policy require for response times?"* Answering requires querying (1) a data-warehouse analytical table (e.g., in Snowflake, BigQuery, or Redshift), (2) a service dependency Property Graph, and (3) a vector store of PDF legal policies. What is the optimal Agentic RAG architecture?
 
 * **A.** Convert the SQL tables and graph edges to text, embed everything into one big vector index alongside the PDFs, and run a single hybrid search over it.
 * **B.** Run a single vector search with `top_k=100` over the policy PDFs, and let the model infer the remaining parts from them.
@@ -734,7 +734,7 @@ You connect your agent to a Buganizer/Jira MCP Server that exposes **95 tools** 
 ---
 
 ### Question 42 (Intermediate/Advanced): MCP Transports (`stdio` vs. `Streamable HTTP`) & the Status of `Sampling`
-Which MCP transport should you use for (1) a local IDE agent running a local Git helper process on the developer's laptop vs. (2) a cloud-hosted enterprise BigQuery MCP service shared across teams—and what is the status of the client **`Sampling`** capability in the current (`2026-07-28`) spec?
+Which MCP transport should you use for (1) a local IDE agent running a local Git helper process on the developer's laptop vs. (2) a cloud-hosted enterprise data-warehouse MCP service shared across teams—and what is the status of the client **`Sampling`** capability in the current (`2026-07-28`) spec?
 
 * **A.** (1) Streamable HTTP on localhost, (2) `stdio` over an SSH tunnel; Sampling is the recommended way for servers to call an LLM.
 * **B.** (1) `stdio`, (2) the legacy HTTP+SSE transport; Sampling lets servers request LLM completions via the host and remains a core, recommended feature.
@@ -773,9 +773,9 @@ What are these three attacks called, and how do you defend against them?
 ---
 
 ### Question 44 (Advanced): Combining MCP (Vertical) with A2A (Horizontal)
-Your company's **Order Resolution Coordinator Agent** (built in Google ADK) needs to:
+Your company's **Order Resolution Coordinator Agent** (built in-house, e.g., with Google ADK or the Microsoft Agent Framework) needs to:
 1. Query an internal Postgres `orders` table and send a Slack notification.
-2. Delegate a complex cross-border customs & tariff investigation to an external **Customs Broker Agent** (built in LangGraph by a logistics partner), which takes 3 minutes, may ask a clarifying question mid-investigation, and returns a signed PDF customs declaration artifact without exposing its proprietary tariff database or internal prompts.
+2. Delegate a complex cross-border customs & tariff investigation to an external **Customs Broker Agent** (built by a logistics partner on a different framework, e.g., LangGraph or CrewAI), which takes 3 minutes, may ask a clarifying question mid-investigation, and returns a signed PDF customs declaration artifact without exposing its proprietary tariff database or internal prompts.
 
 How should (1) and (2) be integrated?
 
@@ -823,7 +823,7 @@ You are writing a trajectory evaluation test for an incident-debugging agent. Th
 > **Correct Answer:** **C**
 >
 > **Explanation:**
-> `IN_ORDER_MATCH` (subsequence match) is the workhorse of trajectory evaluation: it enforces mandatory ordering (e.g., *verify before mutating*) without failing an agent that makes valid exploratory or self-healing calls. (ADK exposes `EXACT`, `IN_ORDER`, and `ANY_ORDER` match types.)
+> `IN_ORDER_MATCH` (subsequence match) is the workhorse of trajectory evaluation: it enforces mandatory ordering (e.g., *verify before mutating*) without failing an agent that makes valid exploratory or self-healing calls. (Eval tools name these modes differently: Google ADK exposes `EXACT`, `IN_ORDER`, and `ANY_ORDER` match types, while LangChain's AgentEvals offers `strict`, `unordered`, `subset`, and `superset`.)
 >
 > **Distractor Analysis:** **(A)** fails this valid run because of the extra calls. **(B)** passes it, but it would also pass a run that checked the SLA *before* looking at deployments. **(D)** can't enforce any ordering.
 
@@ -874,7 +874,7 @@ An agent workflow fetches a 75,000-token log dump in Step 1, summarizes it in St
 > **Correct Answer:** **A**
 >
 > **Explanation:**
-> **Pass-by-reference** (`blob://run_99/logs.json`) keeps checkpoints small, and a **durable checkpoint** means zero compute during the wait and survival across deploys. Framework equivalents include LangGraph's `interrupt()` with a checkpointer and ADK's tool confirmation with resumability. Caveat: when LangGraph resumes, it re-runs the interrupted node from its first line, so place side effects after `interrupt()` or make them idempotent.
+> **Pass-by-reference** (`blob://run_99/logs.json`) keeps checkpoints small, and a **durable checkpoint** means zero compute during the wait and survival across deploys. Framework equivalents include LangGraph's `interrupt()` with a checkpointer, ADK's tool confirmation with resumability, and durable-execution engines such as Temporal (a workflow waiting on a signal). Caveat: when LangGraph resumes, it re-runs the interrupted node from its first line, so place side effects after `interrupt()` or make them idempotent.
 >
 > **Distractor Analysis:** **(B)** loses the run on any restart or deploy and keeps the context bloated. **(C)** holds memory for hours and still dies on restart. **(D)** bloats every checkpoint; the approver can follow the URI instead.
 
@@ -882,7 +882,7 @@ An agent workflow fetches a 75,000-token log dump in Step 1, summarizes it in St
 
 ### Question 50 (Advanced): Framework Selection & Idiom Mapping Across the Ecosystem
 Match each engineering requirement below to the framework and primitive designed for it:
-1. **Requirement 1:** Declarative sequential/parallel agent composition on Google Cloud where `LogAgent` writes to `session.state["logs"]` via `output_key="logs"` and a Coordinator delegates via `AgentTool` or `sub_agents`, with built-in MCP & A2A support.
+1. **Requirement 1:** Declarative sequential/parallel agent composition where `LogAgent` writes to `session.state["logs"]` via `output_key="logs"` and a Coordinator delegates via `AgentTool` or `sub_agents`, with built-in MCP & A2A support.
 2. **Requirement 2:** Low-level cyclic state machine where dynamic Map-Reduce workers are spawned via `Send("worker", ...)`, parallel list updates merge via `Annotated[list, operator.add]`, and nodes jump via `Command(goto=...)`.
 3. **Requirement 3:** Role-based organizational teams (`Crew`) combined with event-driven outer state machines (`@start`, `@listen`, `@router` `Flows`).
 
@@ -894,9 +894,10 @@ Match each engineering requirement below to the framework and primitive designed
 > **Correct Answer:** **A**
 >
 > **Explanation:**
-> * **Google ADK:** `LlmAgent`, `SequentialAgent`/`ParallelAgent`/`LoopAgent`, `output_key` writes to session state, `AgentTool` vs. `sub_agents`, callbacks and plugins, and Google Cloud deployment (e.g., Agent Runtime, formerly Vertex AI Agent Engine).
+> * **Google ADK:** `LlmAgent`, `SequentialAgent`/`ParallelAgent`/`LoopAgent`, `output_key` writes to session state, `AgentTool` vs. `sub_agents`, callbacks and plugins; deployable to any container platform or Kubernetes, or to Google's managed Agent Runtime (formerly Vertex AI Agent Engine).
 > * **LangGraph:** `StateGraph`, `Annotated[..., operator.add]` reducers, `Send()` dynamic fan-out, `Command(goto=...)`, and `interrupt()` with checkpointers.
 > * **CrewAI:** declarative role/task `Crews` (`Process.sequential` / `Process.hierarchical`) inside event-driven `Flows`.
+> * Peers such as the Microsoft Agent Framework, the OpenAI Agents SDK, the Claude Agent SDK, and LlamaIndex have their own signature idioms; the skill being tested is recognizing each framework's primitives, not ranking frameworks.
 >
 > **Distractor Analysis:** **(D)** gets ADK right but swaps the other two: `Send`/`Command` are LangGraph primitives, and `Crew`/`@listen` are CrewAI. **(B)** and **(C)** mismatch the idioms; the OpenAI Agents SDK's signature idioms are handoffs, guardrails, sessions, and tracing, not Crews and Flows.
 
@@ -975,12 +976,12 @@ In the **MemGPT (OS-Inspired Virtual Memory)** architecture (Packer et al., 2023
 ---
 
 ### Question 55 (Advanced): Bi-Temporal Knowledge Graph Memory vs. Pure Vector Memory
-In January, a user tells your architecture assistant: *"Our `checkout-service` uses Postgres 14."* In October, the user says: *"We finished migrating `checkout-service` from Postgres 14 to Cloud Spanner today."* When the user asks in November *"What database does `checkout-service` use?"*, a pure vector memory store retrieves **both** the January and October chunks, confusing the agent. How does a **Bi-Temporal Knowledge Graph Memory (e.g., Graphiti / Zep)** solve this, and when should memory consolidation run?
+In January, a user tells your architecture assistant: *"Our `checkout-service` uses Postgres 14."* In October, the user says: *"We finished migrating `checkout-service` from Postgres 14 to CockroachDB today."* When the user asks in November *"What database does `checkout-service` use?"*, a pure vector memory store retrieves **both** the January and October chunks, confusing the agent. How does a **Bi-Temporal Knowledge Graph Memory (e.g., Graphiti / Zep)** solve this, and when should memory consolidation run?
 
 * **A.** Keep both facts and add a recency boost to vector scoring, so the newer October chunk always ranks above the January one at retrieval time.
 * **B.** Delete the January fact as soon as the October fact arrives, so only current facts remain in memory.
 * **C.** Re-embed all memories nightly with their dates written into the chunk text, so the vector store can reason about which fact is newer and silently drop the older one.
-* **D.** Edges carry valid-time fields: the migration sets `t_invalid` on the Postgres 14 edge and adds a Spanner edge with `t_invalid = NULL`; extraction runs async.
+* **D.** Edges carry valid-time fields: the migration sets `t_invalid` on the Postgres 14 edge and adds a CockroachDB edge with `t_invalid = NULL`; extraction runs async.
 
 > **Correct Answer:** **D**
 >
@@ -1120,17 +1121,17 @@ Match each latency metric below to the physical bottleneck that dominates it:
 ---
 
 ### Question 63 (Intermediate): Applying the 6 Tokenomics Levers Together
-Your multi-agent system currently costs \$0.48 per ticket and takes $14\text{s}$ because every query runs on a frontier Pro model with a large thinking budget, binds 70 MCP tool schemas eagerly, and passes the full chat history across 5 turns. Which combination of architectural levers can substantially cut **both CpO and latency** without losing quality?
+Your multi-agent system currently costs \$0.48 per ticket and takes $14\text{s}$ because every query runs on a frontier model with a large thinking budget, binds 70 MCP tool schemas eagerly, and passes the full chat history across 5 turns. Which combination of architectural levers can substantially cut **both CpO and latency** without losing quality?
 
-* **A.** Route simple queries to a Flash-class model with minimal thinking, use Pro only for planning, cache the static prefix, lazy-load MCP schemas, and mask old observations.
-* **B.** Switch every query to the cheapest Flash model with thinking disabled, and keep the rest of the architecture (eager MCP schemas, full chat history, no caching) unchanged.
-* **C.** Raise the thinking budget to 32K tokens, so the Pro model finishes in fewer turns with fewer total calls.
+* **A.** Route simple queries to a small, fast model with minimal thinking, use the frontier model only to plan, cache the static prefix, lazy-load MCP schemas, and mask old observations.
+* **B.** Switch every query to the cheapest small model with thinking disabled, and keep the rest of the architecture (eager MCP schemas, full chat history, no caching) unchanged.
+* **C.** Raise the thinking budget to 32K tokens, so the frontier model finishes in fewer turns with fewer total calls.
 * **D.** Move all traffic to the Batch API for its roughly 50% discount, keeping the same model, prompts, eager tool schemas, and full chat history.
 
 > **Correct Answer:** **A**
 >
 > **Explanation:**
-> Combining **model and thinking tiering, a planner–executor split, prefix caching, lazy schemas, and context compaction** compounds multiplicatively across the components of the Token Bill of Materials (TBOM). Thinking controls are provider-specific (e.g., Gemini `thinking_budget` / `thinking_level`, OpenAI `reasoning_effort`, Claude `budget_tokens`). Measure the savings on your own workload; they vary widely.
+> Combining **model and thinking tiering, a planner–executor split, prefix caching, lazy schemas, and context compaction** compounds multiplicatively across the components of the Token Bill of Materials (TBOM). Thinking controls are provider-specific (e.g., OpenAI `reasoning_effort`, Claude `budget_tokens`, Gemini `thinking_budget` / `thinking_level`; some open-weight models such as Qwen3 expose a thinking on/off switch). Measure the savings on your own workload; they vary widely.
 >
 > **Distractor Analysis:** **(B)** degrades the hard queries, and the retries and failures can *raise* CpO. **(C)** adds output-priced tokens and decode time. **(D)** Batch is asynchronous (minutes to hours), which breaks interactive latency.
 
@@ -1142,7 +1143,7 @@ In an **Orchestrator–Workers (Pattern 3.1)** system, a malformed customer log 
 * **A.** In a provider-side monthly spending cap configured in the cloud billing console, with an automatic alert to the finance team whenever monthly spend crosses 80% of budget.
 * **B.** In a per-worker `max_retries=3` setting with a per-call timeout, but no dollar budget shared across the parent and its workers.
 * **C.** In a system-prompt instruction telling each worker: "Please spend less than 25 cents on this ticket."
-* **D.** In a thread-safe `TokenBudgetEnforcer` in shared request-scoped state (e.g., the root `InvocationContext`) that pre-flights calls, records usage, and aborts at the cap.
+* **D.** In a thread-safe `TokenBudgetEnforcer` in shared request-scoped state (e.g., the root run/invocation context) that pre-flights calls, records usage, and aborts at the cap.
 
 > **Correct Answer:** **D**
 >
@@ -1157,14 +1158,14 @@ In an **Orchestrator–Workers (Pattern 3.1)** system, a malformed customer log 
 When 200 users simultaneously trigger a 5-way **Parallel Fan-Out (Pattern 2.2)** workflow at 9:00 AM, your backend suddenly fires **1,000 concurrent LLM requests** in the same second, hitting Pay-As-You-Go (PAYGO) HTTP 429 rate limits. What is the production capacity architecture for bursty multi-agent workloads?
 
 * **A.** Client-side exponential backoff with jitter on every 429, and no other changes, since the burst only lasts a few seconds each morning.
-* **B.** Reserve Provisioned Throughput (Vertex AI GSUs, Azure OpenAI PTUs) for base load, let bursts spill over to PAYGO, and move offline work (evals, distillation) to Batch.
+* **B.** Reserve provisioned throughput for steady base load, let bursts spill over to on-demand PAYGO, and move offline work (evals, distillation) to Batch.
 * **C.** Provision dedicated capacity for 10× your highest 1-second spike, and accept that it sits mostly idle the rest of the day.
 * **D.** Move all traffic, including interactive requests, to the Batch API to get its roughly 50% discount and to avoid the PAYGO rate limits on synchronous endpoints entirely.
 
 > **Correct Answer:** **B**
 >
 > **Explanation:**
-> Size reservations for base load (e.g., P50–P75 concurrency). On Vertex AI, traffic above Provisioned Throughput spills over to PAYGO by default, and the `X-Vertex-AI-LLM-Request-Type` header can force dedicated-only or shared-only. Reserved capacity removes most throttling and makes latency more predictable, but it doesn't hard-guarantee TTFT. Also bound your own fan-out with semaphores.
+> Size reservations for base load (e.g., P50–P75 concurrency). Major providers all sell reserved capacity (Azure OpenAI PTUs, Amazon Bedrock Provisioned Throughput, Google Vertex AI GSUs), and OpenAI, Anthropic, Google, and AWS offer discounted batch APIs. Overflow behavior is provider-specific: Azure OpenAI offers optional spillover from a PTU deployment to a standard deployment; on Vertex AI, traffic above Provisioned Throughput spills over to PAYGO by default, and the `X-Vertex-AI-LLM-Request-Type` header can force dedicated-only or shared-only. Where there is no built-in spillover, route overflow yourself (e.g., through an API gateway). Reserved capacity removes most throttling and makes latency more predictable, but it doesn't hard-guarantee TTFT. Also bound your own fan-out with semaphores.
 >
 > **Distractor Analysis:** **(A)** Backoff is necessary hygiene, but it adds latency without adding capacity. **(C)** is extremely wasteful. **(D)** Batch turnaround (minutes to hours) is unusable for interactive traffic.
 
@@ -1173,7 +1174,7 @@ When 200 users simultaneously trigger a 5-way **Parallel Fan-Out (Pattern 2.2)**
 ## Part 13: Multimodal, Computer-Use & Real-Time Streaming Agents (Q66–Q70)
 
 ### Question 66 (Beginner): Cascaded Voice Pipelines vs. Native Multimodal Bidirectional Streaming
-Why does a **Native Multimodal Bidirectional Streaming** architecture (e.g., the Gemini Live API over a stateful WebSocket, or OpenAI Realtime over WebRTC/WebSocket) usually outperform a traditional cascaded `ASR (Speech-to-Text) -> Text LLM -> TTS (Text-to-Speech)` pipeline for real-time voice & video field assistance?
+Why does a **Native Multimodal Bidirectional Streaming** architecture (e.g., OpenAI Realtime over WebRTC/WebSocket, the Gemini Live API over a stateful WebSocket, or Amazon Nova Sonic via Bedrock's bidirectional streaming API) usually outperform a traditional cascaded `ASR (Speech-to-Text) -> Text LLM -> TTS (Text-to-Speech)` pipeline for real-time voice & video field assistance?
 
 * **A.** Cascaded pipelines can't call tools in the middle of a conversation, while native multimodal models can call them asynchronously while they keep talking to the user.
 * **B.** Native models are always cheaper per minute than cascaded pipelines, which is the main reason to switch.
@@ -1183,7 +1184,7 @@ Why does a **Native Multimodal Bidirectional Streaming** architecture (e.g., the
 > **Correct Answer:** **D**
 >
 > **Explanation:**
-> Native streaming removes the intermediate STT/TTS serialization and keeps paralinguistic cues (urgency, hesitation) and live visual context. Cascades still make sense when you need fine control over each stage: a specific TTS voice, text-level guardrails, or auditable transcripts.
+> Native streaming removes the intermediate STT/TTS serialization and keeps paralinguistic cues (urgency, hesitation) and live visual context. Cascades still make sense when you need fine control over each stage: a specific TTS voice, text-level guardrails, or auditable transcripts. Open-source stacks such as LiveKit Agents and Pipecat can orchestrate either architecture across providers.
 >
 > **Distractor Analysis:** **(A)** The text LLM in a cascade can call tools. **(B)** Audio tokens aren't necessarily cheaper; cost depends on the provider and the model. **(C)** Accuracy isn't the core latency issue; the serial hops are.
 
@@ -1200,7 +1201,7 @@ Your **Computer-Use Agent** needs to operate a complex web-based ERP dashboard t
 > **Correct Answer:** **C**
 >
 > **Explanation:**
-> SoM combines visual layout understanding with deterministic element-ID selection, which greatly reduces coordinate-estimation errors on dense UIs. It is a strong default for general VLMs. Models trained specifically for computer use (e.g., Gemini 2.5 Computer Use, which emits coordinates on a 0–999 normalized grid, or Claude, which uses absolute pixels) can output coordinates directly.
+> SoM combines visual layout understanding with deterministic element-ID selection, which greatly reduces coordinate-estimation errors on dense UIs. It is a strong default for general VLMs. Models trained specifically for computer use (e.g., Anthropic's Claude computer use, which uses absolute pixels; OpenAI's computer-use model behind Operator; or Gemini 2.5 Computer Use, which emits coordinates on a 0–999 normalized grid) can output coordinates directly. Open-source browser agents such as browser-use apply a similar idea by indexing interactive DOM elements.
 >
 > **Distractor Analysis:** **(A)** Downscaling *increases* the error per predicted pixel. **(B)** Averaging two biased guesses doesn't remove the bias. **(D)** Canvas charts and custom popups may not be meaningfully represented in the DOM, and you lose the visual context.
 
@@ -1241,7 +1242,7 @@ During a live voice session, the agent is 4 seconds into speaking a 15-second ex
 ---
 
 ### Question 70 (Advanced): Non-Blocking Async Tools & Frame Gating in Live Multimodal Streams
-Your live video/voice insurance claims agent needs to call `verify_fema_flood_zone(address)`, which takes **4 seconds** to query BigQuery and external GIS APIs, while the user is streaming live $1\text{ FPS}$ camera video of flood damage. How do you prevent (1) 4 seconds of dead air on the voice call and (2) burning roughly $1\text{M}$ video tokens per hour on static camera frames?
+Your live video/voice insurance claims agent needs to call `verify_fema_flood_zone(address)`, which takes **4 seconds** to query a data warehouse and external GIS APIs, while the user is streaming live $1\text{ FPS}$ camera video of flood damage. How do you prevent (1) 4 seconds of dead air on the voice call and (2) burning roughly $1\text{M}$ video tokens per hour on static camera frames?
 
 * **A.** Block the stream during the 4-second call, buffer the camera frames locally, and send them all afterwards at 1 FPS so nothing is lost.
 * **B.** Have the model say "please hold", await the tool synchronously, and raise the video to 5 FPS for better grounding meanwhile.
@@ -1251,7 +1252,7 @@ Your live video/voice insurance claims agent needs to call `verify_fema_flood_zo
 > **Correct Answer:** **C**
 >
 > **Explanation:**
-> In the Gemini Live API, a function declared `NON_BLOCKING` runs while the conversation continues, and the `FunctionResponse` carries `scheduling` (`INTERRUPT`, `WHEN_IDLE`, or `SILENT`). At about 17K tokens per minute for 1 FPS video, static frames add up to roughly 1M tokens per hour, so **client-side perceptual-hash frame gating** (send only on meaningful scene change) cuts spend sharply.
+> In the Gemini Live API, a function declared `NON_BLOCKING` runs while the conversation continues, and the `FunctionResponse` carries `scheduling` (`INTERRUPT`, `WHEN_IDLE`, or `SILENT`); that is one vendor's API, and OpenAI's `gpt-realtime` similarly supports asynchronous function calling, where your app runs the tool in the background and injects the result when it's ready. At about 17K tokens per minute for 1 FPS video, static frames add up to roughly 1M tokens per hour, so **client-side perceptual-hash frame gating** (send only on meaningful scene change) cuts spend sharply.
 >
 > **Distractor Analysis:** **(A)** creates dead air and then a burst of stale frames. **(B)** is dead air with a filler phrase, and raising the frame rate multiplies token spend. **(D)** fixes cost but throws away the visual grounding that the damage assessment needs.
 
@@ -1411,7 +1412,7 @@ Your team uses a **Meta-Optimizer LLM (`TextGrad`-style)** to inspect 15 failed 
 ---
 
 ### Question 79 (Advanced): Trajectory Distillation & Natural DPO Preference Pairs from Self-Healing Loops
-You launched a complex SQL & log-debugging agent using a heavyweight **Frontier Teacher Model** (e.g., a Pro-class model). Over 30 days, it logged 15,000 verified successful trajectories. In 3,000 of those runs, the Teacher made a tool schema/SQL error on **Attempt 1**, received a `ToolExecutionError` observation, and emitted the fixed, working tool call on **Attempt 2**. How can you use those traces to distill a **much cheaper, faster Flash-class Student Model** that doesn't even make the Attempt 1 mistake?
+You launched a complex SQL & log-debugging agent using a heavyweight **Frontier Teacher Model** (e.g., a GPT-, Claude-, or Gemini-class frontier model). Over 30 days, it logged 15,000 verified successful trajectories. In 3,000 of those runs, the Teacher made a tool schema/SQL error on **Attempt 1**, received a `ToolExecutionError` observation, and emitted the fixed, working tool call on **Attempt 2**. How can you use those traces to distill a **much cheaper, faster small Student Model** (e.g., an open-weight Llama, Qwen, or Mistral model) that doesn't even make the Attempt 1 mistake?
 
 * **A.** Run SFT on all 15,000 traces exactly as logged, including the failed Attempt 1 calls, so the Student learns the recovery behavior.
 * **B.** Discard the 3,000 self-healed traces as noisy, and run SFT only on the 12,000 clean first-try trajectories.
@@ -1428,7 +1429,7 @@ You launched a complex SQL & log-debugging agent using a heavyweight **Frontier 
 ---
 
 ### Question 80 (Advanced): Rolling Out Distilled Models via Dark Shadowing & Verifier-Gated Cascades
-After distilling your **Flash Student Model**, how should you roll it out to production to capture most of the cost & latency savings while minimizing customer-visible quality drops on novel edge cases?
+After distilling your **small Student Model**, how should you roll it out to production to capture most of the cost & latency savings while minimizing customer-visible quality drops on novel edge cases?
 
 * **A.** Shadow the Student on live traffic against the Teacher first; then let it serve, escalating to the Teacher on checkable signals (schema failures, tool errors, low verifier scores).
 * **B.** Canary 5% of traffic to the Student with no shadow phase, escalating to the Teacher whenever the Student reports its own confidence as below 0.8 in its structured output.
@@ -1617,7 +1618,7 @@ After switching embedding models, your end-to-end answer-correctness score drops
 | **Q13** | Orchestrator–Workers + Semaphore Bounds | **D** | **Q53** | Observation Masking & Watermark Compaction | **B** |
 | **Q14** | Evaluator–Optimizer Context & Tool Isolation | **C** | **Q54** | OS Virtual Memory (`MemGPT` Core vs. Archival) | **C** |
 | **Q15** | Preventing Critic Nitpicking (`blocking_defects`) | **C** | **Q55** | Bi-Temporal Knowledge Graphs (`t_valid`/`t_invalid`) | **D** |
-| **Q16** | Supervisor: `AgentTool` vs. Peer Handoffs | **B** | **Q56** | Indirect Prompt Injection & "Lethal Trifecta" | **B** |
+| **Q16** | Supervisor: Agents-as-Tools vs. Peer Handoffs | **B** | **Q56** | Indirect Prompt Injection & "Lethal Trifecta" | **B** |
 | **Q17** | Solving the "Telephone Game" in Hierarchies | **A** | **Q57** | Markdown Image Exfiltration & CSP `img-src` | **D** |
 | **Q18** | Composing Hybrid Orchestration Topologies | **D** | **Q58** | Dual-LLM Privilege Separation & Capabilities (`CaMeL`) | **A** |
 | **Q19** | Supervisor vs. Swarm Per-Turn Latency | **A** | **Q59** | RFC 8693 Token Exchange (`sub`+`act`) & DB RLS | **B** |

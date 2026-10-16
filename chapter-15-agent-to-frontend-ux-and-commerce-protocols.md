@@ -166,7 +166,7 @@ Putting [Chapter 9](./chapter-09-mcp-and-a2a-interoperability.md) and Chapter 15
 flowchart TD
     Human["👤 Human User / Browser / Mobile App"]
 
-    subgraph Orch["Primary Enterprise Agent (e.g., Google ADK / LangGraph)"]
+    subgraph Orch["Primary Enterprise Agent (any framework, e.g., LangGraph / CrewAI / ADK / Microsoft Agent Framework)"]
         Core["Orchestrator & Reasoning Loop"]
     end
 

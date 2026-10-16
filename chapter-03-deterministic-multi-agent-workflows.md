@@ -23,7 +23,7 @@ flowchart TD
 
 > [!TIP]
 > **Rule out the single-agent fixes first.** Each trigger has a cheaper remedy that keeps one agent:
-> * **Tool overload:** There is no universal "magic number" — the threshold depends on the model and on how much tool descriptions overlap. Before splitting, try dynamic tool loading (e.g., Anthropic's *Tool Search Tool* with deferred tool definitions, Nov 2025) or on-demand **Agent Skills** (Chapter 8).
+> * **Tool overload:** There is no universal "magic number" — the threshold depends on the model and on how much tool descriptions overlap. Before splitting, try dynamic tool loading — a retrieval step over tool descriptions ("Tool-RAG", Chapter 6) or a provider feature such as Anthropic's *Tool Search Tool* with deferred tool definitions (Nov 2025) — or on-demand **Agent Skills** (Chapter 8).
 > * **Context pollution:** Try context engineering first — tool-result clearing, compaction, and structured note-taking (Chapter 11).
 > * **Parallel latency:** Most modern models support **parallel tool calls** in a single turn, which often removes the need for separate agents.
 >
@@ -239,18 +239,51 @@ Every pattern in this chapter is plain application code, so you don't *need* a f
 
 | Framework | Sequential (2.1) | Parallel (2.2) | Routing (2.3) |
 | :--- | :--- | :--- | :--- |
-| **Google ADK** | `SequentialAgent(sub_agents=[...])` | `ParallelAgent(sub_agents=[...])` | Custom `BaseAgent` / callbacks, or LLM delegation via `sub_agents` (Chapter 4) |
 | **LangGraph** | `StateGraph` with `add_edge("a", "b")` | Multiple edges out of one node; fan-in via a reducer such as `Annotated[list, operator.add]` | `add_conditional_edges(node, route_fn)` |
 | **CrewAI Flows** | `@start()` → `@listen(step)` | Several `@listen(step)` methods + `@listen(and_(a, b))` to join | `@router(step)` returning a route label |
 | **Microsoft Agent Framework** | `SequentialBuilder` | `ConcurrentBuilder` | `WorkflowBuilder` with conditional edges |
 | **OpenAI Agents SDK** | Chain `Runner.run(...)` calls in code | `asyncio.gather` over `Runner.run(...)` | A triage agent with `handoffs=[...]` (LLM-driven; see Chapter 5) |
+| **Google ADK** | `SequentialAgent(sub_agents=[...])` | `ParallelAgent(sub_agents=[...])` | Custom `BaseAgent` / callbacks, or LLM delegation via `sub_agents` (Chapter 4) |
 
-**Example: the Running Scenario as a Google ADK workflow** (data flows through session state via `output_key` and `{key}` instruction templating):
+**Example: the Running Scenario's fan-out/fan-in in two SDKs.** Both versions express the same graph; pick whichever framework your team already uses (Chapter 17 compares the rest).
+
+*LangGraph* (each node returns a partial state update; a list of upstream nodes in `add_edge` makes the synthesizer wait for all branches):
+
+```python
+from typing import TypedDict
+from langgraph.graph import StateGraph, START, END
+
+class IncidentState(TypedDict, total=False):
+    ticket: str
+    log_report: str
+    deploy_report: str
+    sla_rules: str
+    resolution: str
+
+async def logs(s: IncidentState) -> dict:      return {"log_report": await log_agent.run_async(s["ticket"])}
+async def deploys(s: IncidentState) -> dict:   return {"deploy_report": await deploy_agent.run_async(s["ticket"])}
+async def contract(s: IncidentState) -> dict:  return {"sla_rules": await contract_agent.run_async(s["ticket"])}
+async def synthesize(s: IncidentState) -> dict:
+    return {"resolution": await synthesizer_agent.run_async(
+        f"Logs: {s['log_report']}\nDeploys: {s['deploy_report']}\nSLA rules: {s['sla_rules']}\n"
+        "Determine root cause and SLA credit eligibility.")}
+
+builder = StateGraph(IncidentState)
+for name, fn in [("logs", logs), ("deploys", deploys), ("contract", contract), ("synthesize", synthesize)]:
+    builder.add_node(name, fn)
+for branch in ("logs", "deploys", "contract"):
+    builder.add_edge(START, branch)                               # fan-out
+builder.add_edge(["logs", "deploys", "contract"], "synthesize")   # fan-in (join)
+builder.add_edge("synthesize", END)
+graph = builder.compile()   # await graph.ainvoke({"ticket": ticket})
+```
+
+*Google ADK* (data flows through session state via `output_key` and `{key}` instruction templating):
 
 ```python
 from google.adk.agents import LlmAgent, ParallelAgent, SequentialAgent
 
-MODEL = "gemini-2.5-flash"  # any model id supported by your ADK version
+MODEL = FAST_MODEL  # a fast/small-tier model: a Gemini model id, or LiteLlm(model="provider/model") for other providers
 
 log_agent = LlmAgent(name="LogAgent", model=MODEL, tools=[query_logs],
                      instruction="Find the 503 window for the ticket.", output_key="log_report")

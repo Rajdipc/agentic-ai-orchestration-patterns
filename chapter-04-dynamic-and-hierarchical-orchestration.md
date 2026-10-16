@@ -85,7 +85,7 @@ async def orchestrator_workers(user_request: str, max_concurrent_workers: int = 
 ```
 
 > [!TIP]
-> **Framework equivalents:** In **LangGraph**, a conditional edge returns a list of `Send("worker", payload)` objects (the map step). A state field with a reducer such as `Annotated[list, operator.add]` collects the results (the reduce step). In **agents-as-tools** SDKs, such as Google ADK's `AgentTool`, OpenAI Agents SDK's `agent.as_tool(...)`, or Claude Agent SDK subagents, the orchestrator model issues one tool call per sub-task, possibly in parallel.
+> **Framework equivalents:** In **LangGraph**, a conditional edge returns a list of `Send("worker", payload)` objects (the map step). A state field with a reducer such as `Annotated[list, operator.add]` collects the results (the reduce step). In **agents-as-tools** SDKs, such as OpenAI Agents SDK's `agent.as_tool(...)`, Claude Agent SDK subagents, or Google ADK's `AgentTool`, the orchestrator model issues one tool call per sub-task, possibly in parallel.
 
 ### Runtime Execution Trace (Running Scenario Evolution)
 * **Evolved Scenario:** *"All 4 of my regional clusters (`us-east`, `us-west`, `eu-central`, `ap-south`) reported intermittent 503s over the last 24 hours. Find the root cause in each region and compute my total SLA credit."*
@@ -148,7 +148,7 @@ sequenceDiagram
 * **Why use two separate agents instead of Single-Agent Self-Reflection (Pattern 1.3)?**
   1. **Less Self-Confirmation Bias:** When a single LLM sees its own prior reasoning in the message history, it tends to defend its initial assumptions. A separate **Critic Agent** receives *only* the specification and the candidate artifact, in a clean context window.
   2. **Asymmetric Least-Privilege Tools:** The Generator can be given code-writing or drafting tools, while the Critic is given read-only audit tools (`verify_log_timestamp`, `run_security_scanner`, `check_legal_clause`).
-  3. **Heterogeneous Model Auditing:** LLM judges show **self-preference bias**: they recognize and favor their own generations (Panickssery, Bowman & Feng, NeurIPS 2024). Running the Generator on one model family (e.g., Gemini) and the Critic on another (e.g., Claude) reduces both self-preference and correlated blind spots. It doesn't remove them.
+  3. **Heterogeneous Model Auditing:** LLM judges show **self-preference bias**: they recognize and favor their own generations (Panickssery, Bowman & Feng, NeurIPS 2024). Running the Generator on one model family and the Critic on another (e.g., generate with a GPT-class model and audit with a Claude- or Gemini-class model, or with an open-weight Llama/Qwen/Mistral model) reduces both self-preference and correlated blind spots. It doesn't remove them.
 * **Ground the Critic, or it adds little:** *"Large Language Models Cannot Self-Correct Reasoning Yet"* (Huang et al., ICLR 2024) found that *intrinsic* self-correction often fails to improve reasoning, and can even degrade it. "Intrinsic" means the model revises its own answer without any external feedback. The Critic's real power comes from **external signals**: unit tests, compilers, schema validators, retrieval-backed citation checks, and policy engines. Run those deterministic checks first and hand their results to the Critic. Modern reasoning ("thinking") models already self-check internally, so an *ungrounded* same-model critique pass adds even less than it used to.
 * **Trade-offs & Failure Modes:**
   * **Nitpicking Loop:** An overly pedantic Critic will reject every draft until `max_rounds` is exhausted, unless you set an explicit severity threshold (e.g., *"Approve if `blocking_defects == []`, even if minor style suggestions remain"*).
@@ -186,7 +186,7 @@ def evaluator_optimizer(task_spec: str, max_rounds: int = 3) -> str:
 ```
 
 > [!NOTE]
-> **Framework equivalents:** Google ADK's `LoopAgent(sub_agents=[generator, critic], max_iterations=3)` runs this loop. The critic ends it early by calling an exit tool that sets `tool_context.actions.escalate = True`. In LangGraph, it is a two-node cycle with a conditional edge back to the generator.
+> **Framework equivalents:** In LangGraph, this is a two-node cycle with a conditional edge back to the generator. Google ADK's `LoopAgent(sub_agents=[generator, critic], max_iterations=3)` runs this loop; the critic ends it early by calling an exit tool that sets `tool_context.actions.escalate = True`. In minimalist SDKs without a loop primitive (e.g., OpenAI Agents SDK, Claude Agent SDK), it is simply the plain loop above wrapped around two agent calls.
 
 ---
 
@@ -219,11 +219,11 @@ flowchart TD
 
 | Implementation Style | How It Works | Pros | Cons |
 | :--- | :--- | :--- | :--- |
-| **1. Agents-as-Tools** | Each specialist sub-agent is wrapped as a callable tool (`call_infra_agent(task: str) -> str`). The Supervisor is simply a standard ReAct agent whose tools happen to be other agents. Examples: ADK `AgentTool(agent)`, OpenAI Agents SDK `agent.as_tool(...)`, LangChain's "subagents as tools" approach. | Can call several sub-agents in one turn (parallel tool calls); sub-agent's internal tool calls stay hidden from the Supervisor's context. | Sub-agent cannot easily talk directly to the end-user without passing back through the Supervisor; returns are usually text unless you enforce a schema. |
+| **1. Agents-as-Tools** | Each specialist sub-agent is wrapped as a callable tool (`call_infra_agent(task: str) -> str`). The Supervisor is simply a standard ReAct agent whose tools happen to be other agents. Examples: OpenAI Agents SDK `agent.as_tool(...)`, LangChain's "subagents as tools" approach, Google ADK `AgentTool(agent)`. | Can call several sub-agents in one turn (parallel tool calls); sub-agent's internal tool calls stay hidden from the Supervisor's context. | Sub-agent cannot easily talk directly to the end-user without passing back through the Supervisor; returns are usually text unless you enforce a schema. |
 | **2. State-Graph Router Node** | Supervisor is a graph node that inspects shared `State` and emits `next_node: Literal["infra", "billing", "FINISH"]`. In LangGraph 1.x, it does this via a conditional edge or by returning `Command(goto="infra", update={...})`. Every specialist node has a return edge back to `Supervisor`. | All nodes read/write a shared typed `State` object (avoiding lossy text summarization); easy to checkpoint and interrupt for HITL. | Requires explicit graph state definitions and reducers for concurrent writes. |
 
 > [!NOTE]
-> A third style, in which the supervisor **transfers control** to a specialist that then talks to the user directly, is a *handoff*. Examples: ADK's `sub_agents` with LLM-driven `transfer_to_agent`, and OpenAI Agents SDK `handoffs=[...]`. Handoffs are covered as Pattern 4.1 in [Chapter 5](./chapter-05-decentralized-and-emergent-topologies.md). Rule of thumb: use **agents-as-tools** when the supervisor must keep ownership and synthesize, and use **handoffs** when the specialist should own the rest of the conversation.
+> A third style, in which the supervisor **transfers control** to a specialist that then talks to the user directly, is a *handoff*. Examples: OpenAI Agents SDK `handoffs=[...]`, Microsoft Agent Framework's `HandoffBuilder`, and Google ADK's `sub_agents` with LLM-driven `transfer_to_agent`. Handoffs are covered as Pattern 4.1 in [Chapter 5](./chapter-05-decentralized-and-emergent-topologies.md). Rule of thumb: use **agents-as-tools** when the supervisor must keep ownership and synthesize, and use **handoffs** when the specialist should own the rest of the conversation.
 
 ### Why This Architecture?
 * **Handles Emergent Cross-Domain Dependencies:** Suppose `InfraAgent` investigates a 503 error and finds the root cause wasn't a code bug at all. It was an **expired credit card that triggered an automatic quota suspension**. A hardcoded pipeline fails here. A **Supervisor** reads `InfraAgent`'s report and dynamically pivots to `BillingAgent`!

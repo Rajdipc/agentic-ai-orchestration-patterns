@@ -25,8 +25,8 @@ Historically, voice and multimodal assistants chained three separate models sequ
 > [!NOTE]
 > **Cascades are not dead.** A well-engineered *streaming* cascade can often get under ~1 s of turn latency: streaming ASR with partial transcripts, LLM token streaming, and TTS that starts speaking on the first sentence (frameworks such as Pipecat and LiveKit Agents are built for this). Many production voice agents still choose cascades for **model freedom** (the strongest text model for tool calling), **text-level guardrails and audit logs**, and **cost control**. Choose native speech-to-speech when tone, interruption handling, and naturalness matter most. Choose a cascade when control and auditability matter most.
 
-### Native Multimodal Bidirectional Streaming (e.g., Gemini Live API, OpenAI Realtime API)
-**Native multimodal streaming models** ingest raw audio PCM chunks, video frames (the Gemini Live API processes video at ~1 FPS), and text directly into a single multimodal model over a persistent **stateful, bidirectional session**, and emit audio plus tool calls directly. Some offerings also have a "half-cascade" variant: native audio input, with the reply produced through text and then TTS, which trades some naturalness for more reliable tool use.
+### Native Multimodal Bidirectional Streaming (e.g., OpenAI Realtime API, Gemini Live API, Amazon Nova Sonic)
+**Native multimodal streaming models** ingest raw audio PCM chunks, text, and (on APIs that support vision) sampled video frames (the Gemini Live API, for example, processes video at ~1 FPS) directly into a single multimodal model over a persistent **stateful, bidirectional session**, and emit audio plus tool calls directly. Managed options include the OpenAI Realtime API (also offered as Azure OpenAI Realtime), Google's Gemini Live API, and Amazon Nova Sonic on Bedrock; open-source frameworks such as **LiveKit Agents** and **Pipecat** can orchestrate either these native speech-to-speech models or a streaming cascade built from self-hosted components. Some offerings also have a "half-cascade" variant: native audio input, with the reply produced through text and then TTS, which trades some naturalness for more reliable tool use.
 
 ```mermaid
 flowchart LR
@@ -38,14 +38,14 @@ flowchart LR
     end
 
     subgraph NativeLive["✅ Native Multimodal Live Stream (Sub-Second Latency, Full Audio/Video Context)"]
-        M1["PCM Audio Stream +<br/>~1 FPS Video Frames"] <-->|"Persistent Full-Duplex Session<br/>(Barge-In + Native Tool Calls)"| Live["Unified Multimodal Model<br/>(e.g., Gemini Live API, OpenAI Realtime)"]
+        M1["PCM Audio Stream +<br/>~1 FPS Video Frames"] <-->|"Persistent Full-Duplex Session<br/>(Barge-In + Native Tool Calls)"| Live["Unified Multimodal Model<br/>(e.g., OpenAI Realtime, Gemini Live, Nova Sonic)"]
     end
 ```
 
 > [!TIP]
 > **Transport & credentials:**
 > * **Transport:** Server-to-server streams typically use WebSockets. Browser and mobile clients benefit from **WebRTC**, which provides built-in jitter buffering, packet-loss handling, and echo cancellation; OpenAI Realtime supports WebRTC, WebSocket, and SIP for telephony.
-> * **Credentials:** Never ship a long-lived API key to a client. Have your backend mint short-lived **ephemeral tokens** (supported by both the Gemini Live API and OpenAI Realtime) for direct client connections.
+> * **Credentials:** Never ship a long-lived API key to a client. Have your backend mint short-lived **ephemeral tokens** (supported by OpenAI / Azure OpenAI Realtime and the Gemini Live API, among others) for direct client connections.
 
 ---
 
@@ -57,6 +57,8 @@ What do you do when an agent needs to file a claim in a 20-year-old insurance po
 * **Anthropic** introduced the computer use tool in October 2024 (beta, with Claude 3.5 Sonnet).
 * **OpenAI** shipped Operator in January 2025, followed by the `computer-use-preview` model through the Responses API's computer-use tool in March 2025.
 * **Google** released the **Gemini 2.5 Computer Use** model in October 2025. It is browser-focused, emits actions on a normalized 0–999 coordinate grid, and runs a per-step safety service that checks each proposed action.
+* **Amazon** previewed **Nova Act**, a browser-action model and SDK, in March 2025.
+* **Open source:** frameworks such as **browser-use** and Playwright-based harnesses (e.g., Microsoft's Playwright MCP server) let you plug in any capable vision or text model, hosted or self-hosted.
 * **Benchmarks:** progress is measured on **OSWorld** (real desktop apps; the human baseline is ~72%) and web benchmarks such as **WebArena** and **WebVoyager**. Scores have been rising fast, so check current leaderboards rather than quoting stale numbers.
 
 ### The Computer-Use Perception $\rightarrow$ Grounding $\rightarrow$ Actuation Loop
@@ -106,11 +108,11 @@ In a natural conversation, if an agent is halfway through reading a 20-second ex
 4. **Echo Cancellation & False Barge-Ins:** Without acoustic echo cancellation (AEC), the agent's own voice coming out of the speaker triggers VAD and the agent interrupts itself. Backchannels (*"uh-huh"*, *"right"*) and background noise cause spurious interruptions too; tune VAD thresholds or use semantic VAD.
 
 ### 2. Non-Blocking Asynchronous Tool Execution During Live Streams
-In a text chat, waiting 3.5 s for a BigQuery or MCP tool call is normal. In a live voice call, 3.5 s of dead silence makes the caller think the line dropped!
+In a text chat, waiting 3.5 s for a data-warehouse query or MCP tool call is normal. In a live voice call, 3.5 s of dead silence makes the caller think the line dropped!
 * **The Non-Blocking Async Tool Pattern:**
   1. When the live model calls a slow tool (`check_flood_zone_elevation(address)`), the runtime dispatches it in a background task while the model keeps talking naturally (*"I'm pulling up the FEMA elevation records for your address right now. While that loads, can you show me the water line on your camera?"*).
   2. When the tool finishes 3.5 s later, the runtime sends the tool response into the still-open session, and the model weaves the result into the conversation.
-* **Native support varies.** The Gemini Live API supports this directly:
+* **Native support varies.** Some realtime APIs handle pending calls asynchronously out of the box (OpenAI's `gpt-realtime` keeps the conversation flowing while a function call is outstanding). The Gemini Live API exposes explicit per-function controls:
   * Declare the function with `behavior: NON_BLOCKING`.
   * When you return the `FunctionResponse`, set `scheduling` to `INTERRUPT` (speak about it now), `WHEN_IDLE` (after finishing the current utterance), or `SILENT` (add to context without speaking).
 
@@ -141,10 +143,12 @@ async def handle_live_stream_tool_call(
         return
 
     # Slow tool: run in the background so the voice/video stream never freezes.
-    # (Gemini Live: declare this function with behavior=NON_BLOCKING so the model keeps talking.)
+    # (Vendor-specific: Gemini Live needs behavior=NON_BLOCKING on the declaration; APIs with built-in
+    #  async function calling, such as OpenAI Realtime, keep talking without extra configuration.)
     async def run_and_inject_when_ready() -> None:
         result = await run_tool()
-        # Gemini Live: `scheduling` (INTERRUPT | WHEN_IDLE | SILENT) travels with the FunctionResponse.
+        # Optional delivery hint. Gemini Live maps it to `scheduling` (INTERRUPT | WHEN_IDLE | SILENT) on the
+        # FunctionResponse; adapters for other APIs can ignore it or inject a new conversation item instead.
         await ws_session.send_tool_response(tool_call.id, result, scheduling="WHEN_IDLE")
 
     task = asyncio.create_task(run_and_inject_when_ready())
@@ -156,10 +160,10 @@ async def handle_live_stream_tool_call(
 > Cancel outstanding background tasks when the session closes, and make slow tools with side effects **idempotent**. After a barge-in (*"Actually, cancel that"*), a result that arrives late may be stale, so check that it is still relevant before acting on it.
 
 ### 3. Multimodal Frame & Audio Token Budgeting
-Continuous video at 1 FPS costs ~258 tokens/frame (Gemini 2.x at default media resolution). Continuous audio adds ~25–32 tokens/s (the Live API docs cite ~25 tokens/s; the standard Gemini API counts 32 tokens/s). Together that is **~17,000 tokens per minute**, or roughly **1M tokens per hour**. That is why, *without* context compression, Gemini Live sessions are limited to roughly 2 minutes for audio+video and about 15 minutes for audio-only.
-* **Adaptive Frame Sampling (Motion/Change Gating):** Only transmit a new video frame when the pixel diff or perceptual hash ($pHash$) against the previous frame exceeds a threshold, or when the user is actively speaking or pointing. Lower `media_resolution` settings also cut per-frame tokens substantially.
-* **Sliding-Window Context Compression:** Enable context-window compression with a sliding window (Gemini Live: `context_window_compression` with `sliding_window`) so that 30-minute calls stay within a bounded token window instead of being terminated.
-* **Session Resumption:** The underlying connection has its own lifetime (~10 minutes on Gemini Live, announced by a `GoAway` message). Persist the **session resumption handle** and reconnect transparently so that long calls survive connection resets.
+Every provider meters audio and image tokens differently, but the arithmetic is sobering everywhere. As one published worked example, Google's figures for Gemini are: continuous video at 1 FPS costs ~258 tokens/frame (Gemini 2.x at default media resolution), and continuous audio adds ~25–32 tokens/s (the Live API docs cite ~25 tokens/s; the standard Gemini API counts 32 tokens/s). Together that is **~17,000 tokens per minute**, or roughly **1M tokens per hour**. That is why, *without* context compression, Gemini Live sessions are limited to roughly 2 minutes for audio+video and about 15 minutes for audio-only. Other realtime APIs enforce their own context and session-length caps, so redo this math with your provider's documentation and pricing.
+* **Adaptive Frame Sampling (Motion/Change Gating):** Only transmit a new video frame when the pixel diff or perceptual hash ($pHash$) against the previous frame exceeds a threshold, or when the user is actively speaking or pointing. Lower per-frame resolution settings (e.g., Gemini's `media_resolution`) also cut per-frame tokens substantially.
+* **Sliding-Window Context Compression:** Enable server-side context management (Gemini Live: `context_window_compression` with `sliding_window`; OpenAI Realtime: a `truncation` strategy such as `retention_ratio`), or trim/summarize history yourself, so that 30-minute calls stay within a bounded token window instead of being terminated.
+* **Session Resumption:** The underlying connection or session has its own lifetime (e.g., ~10 minutes per connection on Gemini Live, announced by a `GoAway` message; other APIs cap total session duration). Persist the **session resumption handle** where the API offers one, or rehydrate a fresh session from your own stored transcript and state, and reconnect transparently so that long calls survive connection resets.
 
 ---
 
@@ -169,7 +173,7 @@ Continuous video at 1 FPS costs ~258 tokens/frame (Gemini 2.x at default media r
 | :--- | :--- | :--- | :--- |
 | **🟢 Beginner** | **Native Multimodal Streaming vs. Cascaded STT-LLM-TTS** | Sub-second native audio/video | Native live streaming preserves vocal tone, visual context, and natural turn-taking; streaming cascades remain valid when control, auditability, and model choice matter. Use WebRTC + ephemeral tokens for clients. |
 | **🟡 Intermediate** | **Computer-Use Agents (CUA) & Set-of-Mark (SoM) Grounding** | Browser / Desktop GUI loop | Pick DOM/AX, pixel, or SoM grounding per surface; verify post-action screenshots after critical clicks; treat all on-screen content as untrusted and gate irreversible actions behind human confirmation. |
-| **🔴 Advanced** | **Full-Duplex Barge-In, Async Non-Blocking Tools & Frame Gating** | Zero-freeze live orchestration | Flush client audio and truncate context to what was heard on barge-in, run slow tools as `NON_BLOCKING` with `WHEN_IDLE` scheduling, gate video frames by perceptual diff, and use sliding-window compression + session resumption for long calls. |
+| **🔴 Advanced** | **Full-Duplex Barge-In, Async Non-Blocking Tools & Frame Gating** | Zero-freeze live orchestration | Flush client audio and truncate context to what was heard on barge-in, run slow tools non-blocking (native async function calling where available, e.g., Gemini Live's `NON_BLOCKING` + `WHEN_IDLE`; otherwise a provisional result plus later injection), gate video frames by perceptual diff, and use sliding-window compression + session resumption for long calls. |
 
 ---
 

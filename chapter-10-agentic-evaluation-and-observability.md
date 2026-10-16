@@ -14,7 +14,7 @@ This chapter covers **Agentic Evaluation & Observability** from **Beginner** (Th
 
 Evaluating only an agent's final text output is like grading a self-driving car solely on whether it eventually parked in the garage—ignoring whether it ran four red lights along the way.
 
-Agent evaluation tooling (such as **Google ADK Evaluation**, the **Vertex AI Gen AI evaluation service**, **LangSmith**, **Braintrust**, **Langfuse**, or **Arize Phoenix**) generally scores agents along **three complementary pillars**:
+Agent evaluation tooling (open-source libraries such as **DeepEval**, **Ragas**, or LangChain's **AgentEvals**; platforms such as **LangSmith**, **Braintrust**, **Langfuse**, or **Arize Phoenix**; framework-native evals such as **Google ADK Evaluation**; or managed cloud services such as **Amazon Bedrock AgentCore Evaluations**, **Azure AI Foundry evaluations**, and the **Vertex AI Gen AI evaluation service**) generally scores agents along **three complementary pillars**:
 
 ```mermaid
 flowchart TD
@@ -41,7 +41,7 @@ flowchart TD
 ## 10.2 Intermediate: Trajectory Metrics, 4-Tier Golden Datasets & LLM-as-a-Judge
 
 ### 1. Choosing the Right Trajectory Matching Mode
-When comparing an agent's actual tool-call sequence $T_{\text{actual}}$ against a golden reference trajectory $T_{\text{expected}}$, one size does not fit all. (ADK's `tool_trajectory_avg_score` exposes `EXACT`, `IN_ORDER`, and `ANY_ORDER` match types, and the Vertex AI Gen AI evaluation service offers equivalent `trajectory_exact_match`, `trajectory_in_order_match`, `trajectory_any_order_match`, `trajectory_precision`, and `trajectory_recall` metrics.)
+When comparing an agent's actual tool-call sequence $T_{\text{actual}}$ against a golden reference trajectory $T_{\text{expected}}$, one size does not fit all. (Most toolkits implement some variant of these modes: LangChain's open-source AgentEvals offers `strict`, `unordered`, `subset`, and `superset` trajectory match modes; Google ADK's `tool_trajectory_avg_score` exposes `EXACT`, `IN_ORDER`, and `ANY_ORDER` match types; and managed services such as the Vertex AI Gen AI evaluation service offer `trajectory_exact_match`, `trajectory_in_order_match`, `trajectory_any_order_match`, `trajectory_precision`, and `trajectory_recall` metrics. The names below are generic.)
 
 | Trajectory Match Mode | Definition | When to Use It | Example |
 | :--- | :--- | :--- | :--- |
@@ -118,7 +118,7 @@ def benchmark_pass_hat_k(per_task_results: dict[str, tuple[int, int]], k: int) -
 ### 2. Hermetic Tool Sandboxes & Stateful Mocks
 How do you run CI/CD evaluations on an agent that calls `issue_stripe_refund()` or `kubectl rollout undo` without touching production or failing when external APIs change?
 * **Stateful In-Memory Fake Environments:** Seed a lightweight in-memory database/state fixture at the start of each test case (`initial_db_state = {"deploy_842": {"pool": 5}, "sla_threshold": 45}`), bind the agent's tools to mutate that hermetic fixture, and assert on **both the trajectory and the final mutated database state** (`assert env.db["refunds_issued"] == []`). Comparing final state against an expected state is how τ-bench grades agents, and it's robust to many valid paths.
-* **Record-and-Replay (gRPC `rpcreplay`, HTTP cassettes such as VCR.py):** Record real tool responses during golden staging runs and replay them deterministically in CI/CD. Caveat: replay breaks as soon as the agent issues a request that was never recorded (a different query, a new argument order). Pair it with stateful fakes for exploratory paths and re-record on a schedule.
+* **Record-and-Replay (HTTP cassettes such as VCR.py, WireMock record mode, or gRPC record/replay interceptors):** Record real tool responses during golden staging runs and replay them deterministically in CI/CD. Caveat: replay breaks as soon as the agent issues a request that was never recorded (a different query, a new argument order). Pair it with stateful fakes for exploratory paths and re-record on a schedule.
 
 ### 3. Persona-Driven Multi-Turn User Simulators
 Static multi-turn test scripts break as soon as the agent phrases a clarifying question slightly differently on Turn 2.
@@ -144,16 +144,16 @@ sequenceDiagram
 ```
 
 ### 4. OpenTelemetry Tracing: The Agent Span Tree
-You can't evaluate production behavior you didn't record. The emerging standard is **OpenTelemetry (OTel) with the GenAI semantic conventions**, which define a vendor-neutral span shape that most agent frameworks and observability backends (Langfuse, Arize Phoenix, LangSmith, Braintrust, Datadog, Cloud Trace, and others) can emit or ingest:
+You can't evaluate production behavior you didn't record. The emerging standard is **OpenTelemetry (OTel) with the GenAI semantic conventions**, which define a vendor-neutral span shape that most agent frameworks and observability backends (Langfuse, Arize Phoenix, LangSmith, Braintrust, Datadog, Honeycomb, Grafana, or cloud-native tracing such as AWS X-Ray, Azure Monitor, and Google Cloud Trace) can emit or ingest:
 
 ```mermaid
 flowchart TD
     Root["invoke_agent support_coordinator<br/>gen_ai.operation.name = invoke_agent<br/>gen_ai.conversation.id = conv-42"]
-    Root --> L1["chat gemini-model<br/>gen_ai.usage.input_tokens / output_tokens"]
+    Root --> L1["chat frontier-model<br/>gen_ai.usage.input_tokens / output_tokens"]
     Root --> T1["execute_tool get_deployments<br/>gen_ai.tool.name, gen_ai.tool.call.id"]
     Root --> Sub["invoke_agent billing_specialist<br/>(sub-agent or remote A2A agent)"]
     Sub --> T2["execute_tool check_sla_policy"]
-    Root --> L2["chat gemini-model<br/>(final synthesis)"]
+    Root --> L2["chat frontier-model<br/>(final synthesis)"]
 ```
 
 * **One trace per user turn (or task), one span per step:** `invoke_agent` → model calls (`chat`) → `execute_tool`, with sub-agents nested as child `invoke_agent` spans. Key attributes include `gen_ai.operation.name`, `gen_ai.agent.name`, `gen_ai.request.model`, `gen_ai.usage.input_tokens` / `gen_ai.usage.output_tokens`, `gen_ai.tool.name`, and `gen_ai.conversation.id`.

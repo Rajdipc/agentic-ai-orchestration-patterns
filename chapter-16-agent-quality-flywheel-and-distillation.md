@@ -24,13 +24,13 @@ Instead of ad-hoc manual prompt tweaking ("vibe-driven development"), production
 flowchart LR
     S1["1. Observe<br/>(Capture OpenTelemetry Spans,<br/>Tool Errors & User Signals)"] --> S2["2. Curate & Mine<br/>(Filter Failed/High-Cost Traces,<br/>Redact PII -> New Eval Cases)"]
     S2 --> S3["3. Diagnose<br/>(Step-Level Fault Attribution:<br/>Router? Retriever? Tool? Prompt?)"]
-    S3 --> S4["4. Optimize<br/>(Evolve Prompts/Skills OR<br/>Distill Frontier -> Flash Model)"]
+    S3 --> S4["4. Optimize<br/>(Evolve Prompts/Skills OR<br/>Distill Frontier -> Small/Fast Model)"]
     S4 --> S5["5. Gate & Rollout<br/>(Run Offline 4-Tier Eval + pass^k<br/>-> Shadow & Canary Traffic)"]
     S5 -- "Continuous Telemetry" --> S1
 ```
 
 ### Implicit vs. Explicit Production Quality Signals
-Don't wait for users to click a "Thumbs Down" button—explicit feedback is sparse (typically only a small fraction of sessions) and skewed toward extreme experiences. Mine **implicit behavioral & systems signals** from OpenTelemetry traces:
+Don't wait for users to click a "Thumbs Down" button—explicit feedback is sparse (typically only a small fraction of sessions) and skewed toward extreme experiences. Mine **implicit behavioral & systems signals** from OpenTelemetry traces (in whichever backend you export to: Langfuse, Arize Phoenix, LangSmith, Datadog, or your cloud's native tracing service):
 * **User Rephrase / Retry within 30s:** The user immediately re-asked the same question because the first answer missed the mark.
 * **HITL Edit Distance:** A human reviewer had to heavily edit the agent's drafted email or tool arguments before approving.
 * **Loop & Step Anomalies:** Any trace where `step_count > P95` or where `ToolExecutionError` occurred $>2$ times.
@@ -100,18 +100,18 @@ async def evolve_skill_from_failures(
 
 ---
 
-## 16.3 Advanced: Trajectory Distillation & Model Down-Tiering (Frontier $\rightarrow$ Flash)
+## 16.3 Advanced: Trajectory Distillation & Model Down-Tiering (Frontier $\rightarrow$ Small/Fast Model)
 
-The ultimate ROI of the Agent Quality Flywheel is **Model Distillation (Down-Tiering)**: starting with a heavyweight **Frontier Reasoning Model** (e.g., a Gemini Pro- or Claude Opus-class model) on Day 1 to achieve high accuracy rapidly, and then distilling its verified behavior into a **much faster, much cheaper Student Model** (e.g., a Flash / Flash-Lite-class model or a fine-tuned open-weight model such as Gemma, Llama, or Qwen) once production traffic scales. Gains of roughly an order of magnitude in cost are common for narrow, high-volume tasks, but measure them on *your* workload.
+The ultimate ROI of the Agent Quality Flywheel is **Model Distillation (Down-Tiering)**: starting with a heavyweight **Frontier Reasoning Model** (e.g., a GPT-, Claude Opus-, or Gemini Pro-class model) on Day 1 to achieve high accuracy rapidly, and then distilling its verified behavior into a **much faster, much cheaper Student Model** (e.g., a small/fast tier such as GPT mini-, Claude Haiku-, or Gemini Flash-class models, or a fine-tuned open-weight model such as Llama, Qwen, Mistral, or Gemma) once production traffic scales. Gains of roughly an order of magnitude in cost are common for narrow, high-volume tasks, but measure them on *your* workload.
 
 > [!WARNING]
-> **Check the terms before you distill.** Many model providers' terms of service restrict using their outputs to train models that compete with them. Distilling within the same provider's family (via their managed tuning service) or from a teacher whose license permits it is the safe path. Also note that many reasoning-model APIs return only **summarized or encrypted reasoning**, not the raw chain-of-thought—so plan to distill the *actions* (tool calls, arguments, final answers) plus any visible rationale, not hidden thoughts.
+> **Check the terms before you distill.** Many model providers' terms of service restrict using their outputs to train models that compete with them. Distilling within the same provider's family (via their managed tuning service, e.g., OpenAI fine-tuning, Amazon Bedrock model customization, Azure AI Foundry fine-tuning, or Vertex AI tuning) or from a teacher whose license permits it is the safe path. Also note that many reasoning-model APIs return only **summarized or encrypted reasoning**, not the raw chain-of-thought—so plan to distill the *actions* (tool calls, arguments, final answers) plus any visible rationale, not hidden thoughts.
 
 ```mermaid
 flowchart TD
-    Teacher["1. Frontier Teacher Agent<br/>(Pro / Opus-class Model in Production)<br/>Logs 20,000 Multi-Step Trajectories"] --> Filter["2. Rejection Sampling & Verifier Filter<br/>Keep ONLY traces where:<br/>• Deterministic Verifiers == PASS<br/>• Outcome Judge == 1.0<br/>• Step Count <= Optimal Bound"]
+    Teacher["1. Frontier Teacher Agent<br/>(Frontier-Tier Model in Production)<br/>Logs 20,000 Multi-Step Trajectories"] --> Filter["2. Rejection Sampling & Verifier Filter<br/>Keep ONLY traces where:<br/>• Deterministic Verifiers == PASS<br/>• Outcome Judge == 1.0<br/>• Step Count <= Optimal Bound"]
     Filter --> GoldenDB["3. Curated Trajectory Dataset<br/>• 5,000 Winning Trajectories (SFT)<br/>• 2,000 (Winning vs. Losing) Pairs (DPO)"]
-    GoldenDB --> Train["4. Distill into Fast Student Model<br/>(Supervised Fine-Tuning, then DPO / RFT<br/>on a Flash-class or Open-Weight Model)"]
+    GoldenDB --> Train["4. Distill into Fast Student Model<br/>(Supervised Fine-Tuning, then DPO / RFT<br/>on a Small/Fast-Tier or Open-Weight Model)"]
     Train --> Shadow["5. Shadow & Canary Evaluation<br/>Verify Student pass^3 >= Teacher pass^3<br/>at a Fraction of the Cost & Latency"]
 ```
 
@@ -144,7 +144,7 @@ Never swap a Teacher model for a distilled Student model in one big-bang release
 | :--- | :--- | :--- | :--- |
 | **🟢 Beginner** | **5-Stage Closed-Loop Flywheel & Implicit Signal Mining** | OTel trace capture $\rightarrow$ PII redaction $\rightarrow$ CI eval case | Mine implicit failure signals (user retries, high step counts, HITL edits) into golden test cases continuously; pin model versions and gate every model/prompt change on evals. |
 | **🟡 Intermediate** | **Step-Level Fault Attribution & Automated Prompt/Skill Evolution** | Waterfall blame assignment + `BootstrapFewShot` / `MIPROv2` / `GEPA` / `TextGrad` | Attribute failures to the earliest failing node (Router vs. RAG vs. Tool vs. Prompt) and gate automated prompt/skill diffs against your regression suite plus a held-out set. |
-| **🔴 Advanced** | **Trajectory Distillation (SFT/DPO/RFT) & Shadow Cascades** | Rejection sampling Teacher logs $\rightarrow$ Fine-tuning a Flash-class Student | Use verified traces (SFT), same-context self-heal pairs (DPO), and verifier rewards (RFT) to distill Frontier accuracy into a much cheaper/faster model—within your provider's terms—and roll out via shadow, canary, and verifier-gated cascades. |
+| **🔴 Advanced** | **Trajectory Distillation (SFT/DPO/RFT) & Shadow Cascades** | Rejection sampling Teacher logs $\rightarrow$ Fine-tuning a small/fast-tier Student | Use verified traces (SFT), same-context self-heal pairs (DPO), and verifier rewards (RFT) to distill Frontier accuracy into a much cheaper/faster model—within your provider's terms—and roll out via shadow, canary, and verifier-gated cascades. |
 
 ---
 
