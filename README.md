@@ -9,7 +9,6 @@
 [![Assessment Quiz](https://img.shields.io/badge/Self--Assessment-30%20Scenario%20MCQs-EA4335)](./chapter-08-mcq-assessment-and-case-studies.md)
 [![Medium](https://img.shields.io/badge/Medium-@rajdipch-black?logo=medium&logoColor=white)](https://medium.com/@rajdipch)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://console.cloud.google.com/cloudshell/editor?cloudshell_git_repo=https://github.com/Rajdipc/agentic-ai-orchestration-patterns.git&cloudshell_open_in_editor=README.md)
 
 > ⭐ *If you find this architectural reference guide helpful for designing, interviewing, or building multi-agent systems, please **star this repository**!*
 
