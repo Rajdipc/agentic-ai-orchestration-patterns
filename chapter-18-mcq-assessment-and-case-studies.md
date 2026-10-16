@@ -1,10 +1,10 @@
-# Chapter 18: Architectural Mastery Quiz (80 Scenario-Based MCQs with Answers & Explanations)
+# Chapter 18: Architectural Mastery Quiz (90 Scenario-Based MCQs with Answers & Explanations)
 
 [⬅️ Previous: Chapter 17 — Production State, HITL & Framework Survey](./chapter-17-production-state-hitl-and-frameworks.md) | [📚 Book Index](./README.md)
 
 ---
 
-Test your end-to-end mastery of **Agentic AI Engineering & Orchestration** across all 17 chapters—from foundational laws and multi-agent topologies to **Tool Calling**, **Agentic RAG**, **Agent Skills**, **MCP & A2A**, **Agent Evals**, **Context Engineering & Long-Term Memory**, **Security & Sandboxing**, **FinOps & Tokenomics**, **Multimodal & Computer-Use**, **Frontend UX & Commerce Protocols (`AG-UI`/`A2UI`/`AP2`)**, **The Quality Flywheel & Distillation**, and **Frameworks**. Each question progresses from Beginner to Advanced within its topic and includes the **Correct Answer**, **Architectural Principle**, and **Distractor Analysis**.
+Test your end-to-end mastery of **Agentic AI Engineering & Orchestration** across all 17 chapters plus the RAG Patterns Appendix—from foundational laws and multi-agent topologies to **Tool Calling**, **Agentic RAG**, **Agent Skills**, **MCP & A2A**, **Agent Evals**, **Context Engineering & Long-Term Memory**, **Security & Sandboxing**, **FinOps & Tokenomics**, **Multimodal & Computer-Use**, **Frontend UX & Commerce Protocols (`AG-UI`/`A2UI`/`AP2`)**, **The Quality Flywheel & Distillation**, and **Frameworks**. Each question progresses from Beginner to Advanced within its topic and includes the **Correct Answer**, **Architectural Principle**, and **Distractor Analysis**.
 
 ---
 
@@ -1282,7 +1282,161 @@ After distilling your **Flash Student Model**, how should you roll it out to pro
 
 ---
 
-## Master 80-Question Answer Key
+## Part 16: Appendix A — RAG Patterns Deep Dive (Q81–Q90)
+
+> These questions test the reference material in [Appendix A: The RAG Patterns Field Guide](./appendix-a-rag-patterns-deep-dive.md). Answer letters vary across options on purpose.
+
+### Question 81 (Beginner): Diagnosing a RAG Failure with the Seven Failure Points
+A support bot answers *"What is the max DB pool size for checkout-service?"* incorrectly. Your traces show the gold chunk (`runbook-checkout#3.2`) was **ranked #31 by the hybrid retriever**, but the pipeline only passes the **top 8** to the generator. Which failure point is this, and what is the **first** fix to try?
+
+* **A.** FP4 *Not Extracted*. Rewrite the generation prompt to tell the model to "read the context more carefully."
+* **B.** FP1 *Missing Content*. Add the runbook to the corpus again.
+* **C.** FP2 *Missed the Top-Ranked Documents*. Widen the candidate set (for example, top 50) and add a **cross-encoder reranker** that cuts it back down to the top 8.
+* **D.** FP5 *Wrong Format*. Enforce a JSON output schema.
+
+> **Correct Answer:** **C**
+>
+> **Explanation:**
+> The gold chunk **exists** and **was retrieved**, but it ranked below the cutoff. That is **FP2**. The standard two-stage fix is a **high-recall retriever** (larger $N$) followed by a **high-precision cross-encoder reranker**. **(A)** is the classic anti-pattern of tuning the prompt to fix a retrieval miss: the generator never saw the chunk. **(B)** is wrong because the content is already present. **(D)** doesn't address ranking at all.
+
+---
+
+### Question 82 (Beginner): Why Reciprocal Rank Fusion Instead of Summing Scores
+You fuse BM25 and dense retrieval results. A teammate proposes `final = bm25_score + cosine_similarity`. Why is **Reciprocal Rank Fusion (RRF)** generally preferred as the untuned default?
+
+* **A.** BM25 scores are unbounded and their scale depends on the query, while cosine similarities sit in $[-1, 1]$. RRF uses **only ranks** ($\sum 1/(k + \text{rank})$, $k \approx 60$), so it is scale-free and needs no score normalization or tuning.
+* **B.** RRF retrieves more documents than either retriever alone, which increases recall beyond the union of both lists.
+* **C.** RRF replaces the need for a cross-encoder reranker because it computes cross-attention between query and document.
+* **D.** Summing scores is mathematically impossible because BM25 returns strings.
+
+> **Correct Answer:** **A**
+>
+> **Explanation:**
+> Adding raw scores from incompatible scales lets whichever retriever has larger magnitudes dominate, and normalizing them is fragile. RRF is **rank-based and scale-free**. **(B)** is wrong: fusion can only reorder the union of candidates, never add new ones. **(C)** is wrong: RRF has no cross-attention, so you still rerank afterwards. **(D)** is nonsense, since BM25 returns numeric scores.
+
+---
+
+### Question 83 (Intermediate): Context-Blind Chunks in Financial Filings
+Your corpus is 10-K filings from 500 companies. Chunks like *"Revenue grew 3% over the previous quarter, driven by cloud services"* are retrieved for the wrong company and year, because the chunk text never names either. Which **indexing-time** pattern most directly fixes this?
+
+* **A.** Increase top-$K$ from 10 to 100 so the correct company's chunk is more likely to be included.
+* **B.** Switch from recursive to fixed-size chunking with 50% overlap.
+* **C.** Apply HyDE at query time so the query looks more like a filing.
+* **D.** **Contextual Retrieval:** use an LLM (with prompt caching of the full document) to prepend a short situating context (*"From ACME Corp's FY2025 10-K, Q3 results section…"*) to every chunk before building **both** the embedding and BM25 indexes.
+
+> **Correct Answer:** **D**
+>
+> **Explanation:**
+> The root cause is chunks that **lack their own entity and time context**. Contextual Retrieval injects that context into the indexed text. In Anthropic's published experiments, contextual embeddings plus contextual BM25 cut top-20 retrieval failures by about 49%, and about 67% with reranking. **(A)** adds noise and cost without making chunks distinguishable. **(B)** makes boundaries worse. **(C)** works on the query side and can't add missing entities to the chunks. *Late chunking* would be a valid lower-cost alternative.
+
+---
+
+### Question 84 (Intermediate): Search Small, Read Big
+Policy questions keep getting **partial answers**. The retriever reliably finds the 150-token chunk stating the rule, but the **exceptions** sit in the next paragraphs of the same section, so the model omits them. What's the best pattern?
+
+* **A.** Proposition chunking, so each exception becomes its own atomic fact.
+* **B.** **Parent-Document Retrieval (Small-to-Big):** embed small child chunks for precise matching, store a `parent_id` on each, and return the **deduplicated parent sections** to the generator.
+* **C.** MMR diversity reranking, to push the exceptions into the top-$k$.
+* **D.** Semantic caching of previous policy answers.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> This is the classic tension between **precise search units and context-rich read units**. Parent-document retrieval decouples them: match on the child, read the parent. **(A)** fragments the content further and separates rules from their exceptions. **(C)** promotes *different* chunks, but the exceptions may not match the query semantically at all. **(D)** caches answers and does nothing for completeness.
+
+---
+
+### Question 85 (Intermediate): HyDE vs. Doc2Query
+A team must improve dense retrieval for a **new internal domain** with no labeled data and no fine-tuned embedder. Queries are short and abstract. Which statement correctly contrasts **HyDE** and **Doc2Query (hypothetical question indexing)**?
+
+* **A.** Both run at query time, but HyDE embeds generated questions while Doc2Query embeds generated answers.
+* **B.** HyDE requires labeled `(query, document)` pairs to train a model, while Doc2Query is zero-shot.
+* **C.** **HyDE** generates a *hypothetical answer passage* **per query** and embeds it for search. It adapts to any query but adds a generation step to every request, and the fake passage must never be used as evidence. **Doc2Query** generates questions per chunk **once, offline**, which costs nothing at query time but only covers anticipated question types.
+* **D.** HyDE's hypothetical document should be added to the generator's context, because it often contains the correct answer.
+
+> **Correct Answer:** **C**
+>
+> **Explanation:**
+> HyDE pays the LLM cost **on every query**. Doc2Query pays it **once at indexing time**. Both bridge the asymmetry between questions and statements. **(A)** has the roles reversed. **(B)** is wrong: HyDE's defining property is that it needs **no relevance labels** (Gao et al.). **(D)** is a dangerous anti-pattern, because the hypothetical document may contain hallucinated facts.
+
+---
+
+### Question 86 (Intermediate): Long-Context, RAG or CAG?
+You are building an assistant over a **120K-token product manual** that changes **twice a year** and is **identical for every user** (no access control). Users complain that RAG sometimes misses relevant sections. What is the most appropriate first architecture to test?
+
+* **A.** **Cache-Augmented Generation (CAG) / context caching:** preload the whole manual once into a reusable (provider-side or KV) cache and answer without retrieval. This removes retrieval misses, keeps per-query cost and latency manageable, and you rebuild the cache on each semi-annual update.
+* **B.** Microsoft GraphRAG with Leiden community summaries over the manual.
+* **C.** A Deep Research system with parallel searcher sub-agents.
+* **D.** Proposition chunking with an LLM listwise reranker over the top 100.
+
+> **Correct Answer:** **A**
+>
+> **Explanation:**
+> The knowledge base is **small, static and shared by everyone**, which are exactly CAG's preconditions (Chan et al., *"Don't Do RAG"*). Retrieval misses (FP2) disappear because nothing is retrieved, and caching keeps repeated full-context calls affordable. **(B)**, **(C)** and **(D)** add a lot of cost and complexity for a corpus that fits in context. CAG would be the **wrong** choice if the knowledge base were large, changed often, or needed per-user ACLs, since a shared cache can't enforce them.
+
+---
+
+### Question 87 (Advanced): Global Sensemaking Questions
+Leadership asks: *"Across all 2,000 post-mortems from 2025, what are the five most common systemic root-cause themes?"* Your hybrid-RAG system returns ten random post-mortem chunks and an unconvincing answer. Why, and what's the right pattern?
+
+* **A.** The reranker is too weak. Upgrading to an LLM listwise reranker over the top 100 will fix it.
+* **B.** Increase top-$K$ to 2,000 and stuff every post-mortem into a single prompt.
+* **C.** Use Self-RAG `[IsSup]` checks so the answer is better grounded in the ten retrieved chunks.
+* **D.** This is a **global sensemaking** question. **No single chunk contains the answer**, so top-$k$ retrieval can't work. Use **GraphRAG Global Search** (map-reduce over hierarchical Leiden community summaries) or **RAPTOR** (search over recursive cluster summaries), both of which precompute corpus-level abstractions at indexing time.
+
+> **Correct Answer:** **D**
+>
+> **Explanation:**
+> Top-$k$ retrieval answers **local** questions. Corpus-wide thematic questions need **precomputed abstractions**, such as community summaries (GraphRAG, Edge et al.) or tree summaries (RAPTOR, Sarthi et al.). **(A)** still returns a handful of local chunks. **(B)** blows past cost and context limits and suffers lost-in-the-middle. **(C)** grounds the answer in the wrong evidence set: groundedness isn't the same as coverage.
+
+---
+
+### Question 88 (Advanced): Choosing an Adaptive / Self-Correcting Pattern
+Match each requirement to the best pattern: **(1)** 60% of traffic is chit-chat or simple, 30% single-hop, 10% multi-hop, and you need to cut average cost. **(2)** The internal KB often lacks recent information, and you want a web fallback when retrieved documents are judged irrelevant. **(3)** You are generating long reports where new information needs emerge mid-generation, and you have token log-probabilities.
+
+* **A.** (1) IRCoT · (2) Self-RAG · (3) Speculative RAG
+* **B.** (1) CRAG · (2) FLARE · (3) Adaptive-RAG
+* **C.** (1) **Adaptive-RAG** (complexity classifier routes to no-retrieval, single-step or multi-step) · (2) **CRAG** (retrieval evaluator with an *Incorrect* → web-search fallback) · (3) **FLARE** (retrieves when the next sentence contains low-probability tokens)
+* **D.** (1) GraphRAG · (2) HippoRAG · (3) RAPTOR
+
+> **Correct Answer:** **C**
+>
+> **Explanation:**
+> **Adaptive-RAG** (Jeong et al.) routes by query complexity to avoid over-retrieving on easy traffic. **CRAG** (Yan et al.) grades the *retrieved input* and falls back to web search when the documents are judged incorrect. **FLARE** (Jiang et al.) triggers retrieval **during generation** from low-confidence tokens. **(A)** and **(B)** shuffle the patterns into the wrong slots. **(D)** lists indexing and graph patterns that solve none of the three control-flow requirements.
+
+---
+
+### Question 89 (Advanced): Permission-Aware Enterprise RAG
+Your RAG assistant indexes HR, Finance and Engineering documents. Which design **correctly** prevents a junior engineer from receiving content derived from restricted HR documents?
+
+* **A.** Retrieve the top 20 from the whole index, then add a system-prompt instruction: *"Do not reveal content from HR documents unless the user is in HR."*
+* **B.** **Pre-filter inside retrieval.** Every chunk inherits `allowed_principals` from its source document's ACL. The retriever applies `allowed_principals ∩ user.groups ≠ ∅` **inside the ANN/BM25 query**, using groups from the **authenticated token** (OAuth OBO), never from LLM output. Any semantic cache is keyed by tenant, ACL scope and corpus version.
+* **C.** Retrieve the top 20 from the whole index, then drop unauthorized chunks after retrieval. This is fully sufficient and has no recall downside.
+* **D.** Let a self-querying LLM extract an `acl_group` filter from the user's question.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> **Security trimming must happen inside retrieval**, driven by **verified identity**. **(A)** puts restricted text in the prompt and relies on the model's compliance, which fails to leakage and prompt injection. **(C)** is post-filtering only: it can leave low-privilege users with **zero results** (recall collapse) and is defense in depth at best. **(D)** lets the LLM, which is untrusted and injectable, decide authorization. That is a critical vulnerability.
+
+---
+
+### Question 90 (Advanced): Evaluating RAG — Separating Retrieval from Generation
+After switching embedding models, your end-to-end answer-correctness score drops from 86% to 78%. Which evaluation design lets you **pinpoint the cause** and catch regressions like this in the future?
+
+* **A.** Evaluate the **two halves separately** on a golden set that includes single-hop, multi-hop, exact-ID, multi-turn, **unanswerable** and **permission-boundary** queries. Track **retrieval metrics** (Recall@K, MRR, nDCG@K against labeled gold chunk IDs) separately from **generation metrics** (faithfulness/groundedness, answer completeness, citation precision, correct-refusal rate). Re-index blue/green, because vectors from different embedding models aren't comparable, and run this suite before cut-over.
+* **B.** Track only end-to-end answer correctness with an LLM judge. Per-stage metrics add noise.
+* **C.** Measure only average cosine similarity between queries and retrieved chunks. Higher similarity means better retrieval.
+* **D.** Mix vectors from the old and new embedding models in one index so the comparison happens on the same data.
+
+> **Correct Answer:** **A**
+>
+> **Explanation:**
+> If Recall@K dropped while faithfulness stayed flat, the new **embedder** is at fault. If recall held but faithfulness dropped, look at the generator or context assembly. **(B)** hides which component regressed. **(C)** is a vanity metric: absolute cosine values aren't comparable across models and don't measure whether the *gold* chunk was retrieved. **(D)** is an anti-pattern, because embedding spaces from different models are incompatible.
+
+---
+
+## Master 90-Question Answer Key
 
 | Q# | Topic Tested | Ans | Q# | Topic Tested | Ans |
 | :-: | :--- | :-: | :-: | :--- | :-: |
@@ -1326,6 +1480,16 @@ After distilling your **Flash Student Model**, how should you roll it out to pro
 | **Q38** | Deterministic Offloading via Skill `scripts/` | **B** | **Q78** | Automated Skill Evolution (`TextGrad`) & Gates | **B** |
 | **Q39** | Router Skills, `skill_search` & Ablation Evals | **B** | **Q79** | Trajectory Distillation & Self-Healed DPO Pairs | **B** |
 | **Q40** | MCP Primitives: `Tools`, `Resources`, `Prompts` | **B** | **Q80** | Shadow Deployment & Confidence Teacher Cascades | **B** |
+
+**Part 16 — Appendix A: RAG Patterns Deep Dive**
+
+| Q# | Topic Tested | Ans | Q# | Topic Tested | Ans |
+| :-: | :--- | :-: | :-: | :--- | :-: |
+| **Q81** | Seven Failure Points: FP2 → Wider $N$ + Cross-Encoder | **C** | **Q86** | CAG vs. Long-Context vs. RAG for Small Static KBs | **A** |
+| **Q82** | Reciprocal Rank Fusion vs. Raw Score Summing | **A** | **Q87** | Global Sensemaking: GraphRAG Global / RAPTOR | **D** |
+| **Q83** | Contextual Retrieval for Context-Blind Chunks | **D** | **Q88** | Adaptive-RAG vs. CRAG vs. FLARE | **C** |
+| **Q84** | Parent-Document (Small-to-Big) Retrieval | **B** | **Q89** | ACL Pre-Filtering (Security Trimming) in Retrieval | **B** |
+| **Q85** | HyDE (Query-Time) vs. Doc2Query (Index-Time) | **C** | **Q90** | Separating Retrieval vs. Generation Metrics | **A** |
 
 ---
 

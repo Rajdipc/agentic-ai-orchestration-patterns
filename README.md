@@ -6,7 +6,7 @@
 [![Core Pillars](https://img.shields.io/badge/Pillars-Tools%20%7C%20RAG%20%7C%20Skills%20%7C%20MCP%20%7C%20Evals%20%7C%20Memory%20%7C%20Security%20%7C%20FinOps-8E24AA)](#-18-chapter-curriculum--learning-path)
 [![UX & Commerce Protocols](https://img.shields.io/badge/Protocols-MCP%20%7C%20A2A%20%7C%20AG--UI%20%26%20A2UI%20%7C%20AP2%20(Payments)-00897B)](./chapter-15-agent-to-frontend-ux-and-commerce-protocols.md)
 [![Frameworks](https://img.shields.io/badge/Frameworks-Google%20ADK%20%7C%20LangGraph%20%7C%20CrewAI%20%7C%20AutoGen%20%7C%20OpenAI%20SDK-FBBC04)](#framework-selection-cheat-sheet)
-[![Assessment Quiz](https://img.shields.io/badge/Self--Assessment-80%20Scenario%20MCQs-EA4335)](./chapter-18-mcq-assessment-and-case-studies.md)
+[![Assessment Quiz](https://img.shields.io/badge/Self--Assessment-90%20Scenario%20MCQs-EA4335)](./chapter-18-mcq-assessment-and-case-studies.md)
 [![Medium](https://img.shields.io/badge/Medium-@rajdipch-black?logo=medium&logoColor=white)](https://medium.com/@rajdipch)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
@@ -20,7 +20,8 @@ A complete, framework-agnostic **18-chapter engineering handbook** on **Agentic 
   * **Security, Identity (`OAuth 2.1 OBO`), `CaMeL` & Sandboxing (Ch 12)** · **Agentic FinOps & Tokenomics (`TBOM` / `CpO`) (Ch 13)**
   * **Multimodal Live Streaming & Computer-Use (`SoM`) Agents (Ch 14)** · **Frontend UX & Commerce Protocols (`AG-UI`, `A2UI`, `AP2/A2P`) (Ch 15)**
   * **The Agent Quality Flywheel & Model Distillation (`SFT`/`DPO`/`RFT`) (Ch 16)**
-* **Production State, Frameworks & Self-Assessment (Chapters 17–18):** Durable HITL Checkpointing, Master Decision Matrix, Concrete Code Idioms across **Google ADK**, **LangGraph**, **CrewAI**, **Microsoft AutoGen / Agent Framework**, and **OpenAI Agents SDK**, plus **80 Scenario-Based MCQs** in the final chapter.
+* **Production State, Frameworks & Self-Assessment (Chapters 17–18):** Durable HITL Checkpointing, Master Decision Matrix, Concrete Code Idioms across **Google ADK**, **LangGraph**, **CrewAI**, **Microsoft AutoGen / Agent Framework**, and **OpenAI Agents SDK**, plus **90 Scenario-Based MCQs** in the final chapter.
+* **Appendix A — The RAG Patterns Field Guide:** A deep-dive reference covering **45+ RAG patterns** (chunking, contextual retrieval, RAPTOR, hybrid RRF, ColBERT, HyDE, reranking, CAG vs. long-context, Adaptive-RAG, FLARE, IRCoT, Self-RAG, CRAG, Speculative RAG, GraphRAG, LightRAG, HippoRAG, ColPali) with purpose, when to use, and head-to-head comparison matrices.
 
 ---
 
@@ -30,7 +31,7 @@ A complete, framework-agnostic **18-chapter engineering handbook** on **Agentic 
 | [📚 18-Chapter Curriculum & Learning Path](#-18-chapter-curriculum--learning-path) | [📊 At-a-Glance Pattern Comparison Matrix](#at-a-glance-pattern-comparison-matrix) |
 | [🧭 The Spectrum of Agency & Golden Rule](#the-spectrum-of-agency--the-golden-rule) | [🛠️ Framework Selection Cheat Sheet](#framework-selection-cheat-sheet) |
 | [📐 The Quantitative Laws of Orchestration](#the-quantitative-engineering-laws-of-orchestration) | [🌐 The 4-Plane Agent Protocol Stack](#the-4-plane-enterprise-agent-protocol-stack) |
-| [🌳 Master Architecture Decision Tree](#master-architecture-decision-tree) | [🎯 Test Your Mastery (80 Scenario MCQs)](#-test-your-mastery-80-scenario-mcqs) |
+| [🌳 Master Architecture Decision Tree](#master-architecture-decision-tree) | [🎯 Test Your Mastery (90 Scenario MCQs)](#-test-your-mastery-90-scenario-mcqs) |
 
 ---
 
@@ -57,7 +58,13 @@ Every chapter traces one recurring enterprise scenario (*"AcmeCloud Incident & B
 | **15** | **[Agent-to-Frontend UX & Commerce Protocols](./chapter-15-agent-to-frontend-ux-and-commerce-protocols.md)** | 🟢 $\rightarrow$ 🔴 | **Beginner:** The **3 Tiers of Generative UI** (Mapped Components, Declarative `A2UI`, Sandboxed `iframe`).<br/>**Intermediate:** **AG-UI Bidirectional Event Stream** & **`STATE_DELTA` (RFC 6902 JSON Patch)** Co-Pilot Canvases.<br/>**Advanced:** **AP2 / A2P (Agent Payments Protocol)** Cryptographic `IntentMandate` & `CartMandate` + **The 4-Protocol Stack**. |
 | **16** | **[The Agent Quality Flywheel & Distillation](./chapter-16-agent-quality-flywheel-and-distillation.md)** | 🟢 $\rightarrow$ 🔴 | **Beginner:** The **5-Stage Closed-Loop Flywheel** & mining implicit failure signals (user retries, HITL edits, high steps).<br/>**Intermediate:** **Step-Level Fault Attribution Waterfall** & Automated Prompt/Skill Evolution (`BootstrapFewShot`/`TextGrad`).<br/>**Advanced:** **Trajectory Distillation (Frontier $\rightarrow$ Flash)** via SFT, **Self-Healed DPO Pairs**, & Shadow Cascades. |
 | **17** | **[Production State, HITL & Framework Survey](./chapter-17-production-state-hitl-and-frameworks.md)** | 🔵 Ecosystem | Typed State Scoping, **Durable HITL Checkpointing & Time-Travel**, Master Decision Tree, Comparison Matrix, and concrete code idioms across **Google ADK**, **LangGraph**, **CrewAI**, **AutoGen (AG2)**, and **OpenAI Agents SDK**. |
-| **18** | **[Architectural Mastery Quiz (80 MCQs)](./chapter-18-mcq-assessment-and-case-studies.md)** | 🎓 Final Chapter | **80 Scenario-Based Multiple-Choice Questions** (Beginner $\rightarrow$ Advanced) covering all 17 chapters with detailed explanations and distractor analysis. |
+| **18** | **[Architectural Mastery Quiz (90 MCQs)](./chapter-18-mcq-assessment-and-case-studies.md)** | 🎓 Final Chapter | **90 Scenario-Based Multiple-Choice Questions** (Beginner $\rightarrow$ Advanced) covering all 17 chapters and Appendix A with detailed explanations and distractor analysis. |
+
+### 📎 Appendices (Reference Deep Dives)
+
+| Appendix | Title & Link | Type | What It Covers |
+| :---: | :--- | :---: | :--- |
+| **A** | **[The RAG Patterns Field Guide](./appendix-a-rag-patterns-deep-dive.md)** | 📖 Reference | **45+ RAG patterns**, each with Purpose, Mechanism, Use When / Avoid When, and Cost: **Chunking** (Recursive, Semantic, Proposition, Late Chunking) · **Indexing** (Parent-Document, Auto-Merging, RAPTOR, Contextual Retrieval, Doc2Query) · **Representation** (BM25, SPLADE, Dense, ColBERT, Hybrid RRF) · **Query-Side** (Condensation, Rewrite, RAG-Fusion, HyDE, Step-Back, Decomposition, Routing, Self-Query) · **Post-Retrieval** (Cross-Encoder, LLM Rerank, MMR, Compression, Lost-in-the-Middle Ordering) · **Long-Context vs. RAG vs. CAG vs. Self-Route** · **Adaptive & Agentic** (Adaptive-RAG, FLARE, IRCoT, Self-RAG, CRAG, Speculative RAG, Deep Research) · **Structured & Graph** (Text-to-SQL, KG-RAG, GraphRAG, LightRAG, HippoRAG) · **Multimodal** (ColPali) · **Production** (ACL pre-filtering, freshness, semantic caching, RAG security, Recall@K/MRR/nDCG + faithfulness evals) · Symptom→Pattern table, Decision Tree & **RAG Maturity Ladder (L0–L5)**. |
 
 ---
 
@@ -175,9 +182,9 @@ Full code examples and architectural mappings are provided in [Chapter 17](./cha
 
 ---
 
-## 🎯 Test Your Mastery (80 Scenario MCQs)
+## 🎯 Test Your Mastery (90 Scenario MCQs)
 
-Ready to validate your architectural judgment across all 17 chapters? Jump to the final chapter: **[Chapter 18: Architectural Mastery Quiz (80 Scenario-Based MCQs)](./chapter-18-mcq-assessment-and-case-studies.md)** for 80 real-world system design questions with complete answers and distractor explanations.
+Ready to validate your architectural judgment across all 17 chapters and Appendix A? Jump to the final chapter: **[Chapter 18: Architectural Mastery Quiz (90 Scenario-Based MCQs)](./chapter-18-mcq-assessment-and-case-studies.md)** for 90 real-world system design questions with complete answers and distractor explanations.
 
 ---
 

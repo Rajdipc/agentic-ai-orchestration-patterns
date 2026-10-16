@@ -148,6 +148,11 @@ flowchart TD
 
 ---
 
+> [!TIP]
+> **Go deeper:** For an exhaustive, pattern-by-pattern reference covering chunking strategies, contextual retrieval, RAPTOR, ColBERT, HyDE, reranking, CAG vs. long-context, Adaptive-RAG, FLARE, IRCoT, Speculative RAG, LightRAG, HippoRAG, ColPali, ACL-aware retrieval and RAG evaluation metrics, with comparison matrices and a decision tree, see **[Appendix A: The RAG Patterns Field Guide](./appendix-a-rag-patterns-deep-dive.md)**.
+
+---
+
 ## Chapter 7 Summary Progression
 
 | Level | RAG Architecture | Retrieval Control | Hallucination Defense | Best Used When... |
