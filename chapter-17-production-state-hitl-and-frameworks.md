@@ -1,14 +1,14 @@
-# Chapter 11: Production State, Durable HITL, Master Decision Matrix & Framework Survey
+# Chapter 17: Production State, Durable HITL, Master Decision Matrix & Framework Survey
 
-[⬅️ Previous: Chapter 10 — Agentic Evaluation & Observability](./chapter-10-agentic-evaluation-and-observability.md) | [📚 Book Index](./README.md) | [Next: Chapter 12 — 50-MCQ Architectural Mastery Quiz ➡️](./chapter-12-mcq-assessment-and-case-studies.md)
-
----
-
-This chapter synthesizes our orchestration topologies (Chapters 1–5) and capability pillars (Chapters 6–10) into production state management, durable Human-in-the-Loop (HITL) checkpointing, the **Master Architecture Decision Matrix**, and concrete code mappings across **Google ADK**, **LangGraph**, **CrewAI**, **Microsoft AutoGen / Agent Framework**, and **OpenAI Agents SDK**.
+[⬅️ Previous: Chapter 16 — The Agent Quality Flywheel & Distillation](./chapter-16-agent-quality-flywheel-and-distillation.md) | [📚 Book Index](./README.md) | [Next: Chapter 18 — 80-MCQ Architectural Mastery Quiz ➡️](./chapter-18-mcq-assessment-and-case-studies.md)
 
 ---
 
-## 11.1 Context & State Passing Strategies Across Agents
+This chapter synthesizes our orchestration topologies (Chapters 1–5) and capability pillars (Chapters 6–16) into production state management, durable Human-in-the-Loop (HITL) checkpointing, the **Master Architecture Decision Matrix**, and concrete code mappings across **Google ADK**, **LangGraph**, **CrewAI**, **Microsoft AutoGen / Agent Framework**, and **OpenAI Agents SDK**.
+
+---
+
+## 17.1 Context & State Passing Strategies Across Agents
 
 When Agent A transitions to Agent B, **what exact tokens should enter Agent B's context window?**
 
@@ -39,15 +39,9 @@ flowchart LR
     Billing -- "Writes:\nsla_eligible" --> SharedState
 ```
 
-### Runtime Context Compaction (Preventing "Context Rot")
-Even within a single long-running agent session, prompts eventually approach context limits or suffer from middle-context attention degradation ("Context Rot"). Production orchestrators implement **three compaction strategies**:
-1. **Observation Truncation / Masking:** Replace old raw tool outputs (from $>3$ turns ago) with a placeholder (`"[Tool output archived to artifact://turn_2; summary: found 42m downtime]"`) while keeping the LLM's reasoning turns intact.
-2. **Rolling Summary Window:** Keep the system prompt + pinned facts + the most recent $M$ turns verbatim, while asynchronously summarizing turns $1 \dots (T - M)$ into a rolling `conversation_summary` block.
-3. **Sub-Agent Context Offloading:** Any exploratory sub-task that requires $>3$ tool calls is spawned as an isolated sub-agent so its working memory is reclaimed immediately upon returning its structured result.
-
 ---
 
-## 11.2 Human-in-the-Loop (HITL), Durable Checkpointing & Time-Travel
+## 17.2 Human-in-the-Loop (HITL), Durable Checkpointing & Time-Travel
 
 When an agentic workflow proposes a high-consequence action (issuing a \$5,000 refund, rolling back a production cluster, deleting customer data), you **cannot** block a Python thread with `input()` or `time.sleep()` waiting hours for a human in Slack.
 
@@ -75,7 +69,7 @@ sequenceDiagram
 
 ---
 
-## 11.3 The Master Architecture Decision Tree
+## 17.3 The Master Architecture Decision Tree
 
 Use this decision tree to select the simplest, most reliable orchestration pattern for any problem:
 
@@ -104,7 +98,7 @@ flowchart TD
 
 ---
 
-## 11.4 Master Pattern Comparison Matrix
+## 17.4 Master Pattern Comparison Matrix
 
 Let $L$ be the average latency of a single LLM call, $K$ be the number of loop iterations, and $M$ be the number of specialist agents:
 
@@ -125,7 +119,7 @@ Let $L$ be the average latency of a single LLM call, $K$ be the number of loop i
 
 ---
 
-## 11.5 Deep-Dive Framework Survey: Mapping Concepts to Real Code Idioms
+## 17.5 Deep-Dive Framework Survey: Mapping Concepts to Real Code Idioms
 
 Once you understand the conceptual patterns, every major framework is simply a different ergonomic API over **Agents**, **Control Edges**, and **Shared State**. Below is how the top 5 frameworks implement these patterns in practice.
 
@@ -233,7 +227,7 @@ graph = builder.compile(checkpointer=postgres_checkpointer)
 
 ---
 
-## 11.6 Summary: Which Framework Should You Pick?
+## 17.6 Summary: Which Framework Should You Pick?
 
 | Your Team's Primary Requirement | Recommended Framework | Why |
 | :--- | :--- | :--- |
@@ -245,4 +239,4 @@ graph = builder.compile(checkpointer=postgres_checkpointer)
 
 ---
 
-[⬅️ Previous: Chapter 10 — Agentic Evaluation & Observability](./chapter-10-agentic-evaluation-and-observability.md) | [📚 Book Index](./README.md) | [Next: Chapter 12 — 50-MCQ Architectural Mastery Quiz ➡️](./chapter-12-mcq-assessment-and-case-studies.md)
+[⬅️ Previous: Chapter 16 — The Agent Quality Flywheel & Distillation](./chapter-16-agent-quality-flywheel-and-distillation.md) | [📚 Book Index](./README.md) | [Next: Chapter 18 — 80-MCQ Architectural Mastery Quiz ➡️](./chapter-18-mcq-assessment-and-case-studies.md)

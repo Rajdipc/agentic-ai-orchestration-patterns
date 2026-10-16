@@ -1,6 +1,6 @@
 # Chapter 10: Agentic Evaluation (Evals), Observability & The Quality Flywheel (Beginner to Advanced)
 
-[⬅️ Previous: Chapter 9 — MCP & A2A Interoperability](./chapter-09-mcp-and-a2a-interoperability.md) | [📚 Book Index](./README.md) | [Next: Chapter 11 — Production State, HITL & Framework Survey ➡️](./chapter-11-production-state-hitl-and-frameworks.md)
+[⬅️ Previous: Chapter 9 — MCP & A2A Interoperability](./chapter-09-mcp-and-a2a-interoperability.md) | [📚 Book Index](./README.md) | [Next: Chapter 11 — Context Engineering & Long-Term Memory ➡️](./chapter-11-context-engineering-and-long-term-memory.md)
 
 ---
 
@@ -146,4 +146,4 @@ def compute_cost_per_validated_outcome(results: list[EvalResult], cost_per_1k_to
 
 ---
 
-[⬅️ Previous: Chapter 9 — MCP & A2A Interoperability](./chapter-09-mcp-and-a2a-interoperability.md) | [📚 Book Index](./README.md) | [Next: Chapter 11 — Production State, HITL & Framework Survey ➡️](./chapter-11-production-state-hitl-and-frameworks.md)
+[⬅️ Previous: Chapter 9 — MCP & A2A Interoperability](./chapter-09-mcp-and-a2a-interoperability.md) | [📚 Book Index](./README.md) | [Next: Chapter 11 — Context Engineering & Long-Term Memory ➡️](./chapter-11-context-engineering-and-long-term-memory.md)

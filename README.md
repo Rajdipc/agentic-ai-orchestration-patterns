@@ -2,34 +2,39 @@
 
 [![GitHub Repository](https://img.shields.io/badge/GitHub-agentic--ai--orchestration--patterns-181717?logo=github)](https://github.com/Rajdipc/agentic-ai-orchestration-patterns)
 [![Architecture Patterns](https://img.shields.io/badge/Orchestration-10%20Core%20Topologies-4285F4?logo=google-cloud)](#master-architecture-decision-tree)
-[![Curriculum Level](https://img.shields.io/badge/Curriculum-12%20Chapters%20(Beginner%20to%20Advanced)-34A853)](#-12-chapter-curriculum--learning-path)
-[![Core Pillars](https://img.shields.io/badge/Pillars-Tool%20Calling%20%7C%20Agentic%20RAG%20%7C%20Skills%20%7C%20MCP%20%26%20A2A%20%7C%20Evals-8E24AA)](#-12-chapter-curriculum--learning-path)
+[![Curriculum Level](https://img.shields.io/badge/Curriculum-18%20Chapters%20(Beginner%20to%20Advanced)-34A853)](#-18-chapter-curriculum--learning-path)
+[![Core Pillars](https://img.shields.io/badge/Pillars-Tools%20%7C%20RAG%20%7C%20Skills%20%7C%20MCP%20%7C%20Evals%20%7C%20Memory%20%7C%20Security%20%7C%20FinOps-8E24AA)](#-18-chapter-curriculum--learning-path)
+[![UX & Commerce Protocols](https://img.shields.io/badge/Protocols-MCP%20%7C%20A2A%20%7C%20AG--UI%20%26%20A2UI%20%7C%20AP2%20(Payments)-00897B)](./chapter-15-agent-to-frontend-ux-and-commerce-protocols.md)
 [![Frameworks](https://img.shields.io/badge/Frameworks-Google%20ADK%20%7C%20LangGraph%20%7C%20CrewAI%20%7C%20AutoGen%20%7C%20OpenAI%20SDK-FBBC04)](#framework-selection-cheat-sheet)
-[![Production Engineering](https://img.shields.io/badge/Reliability-Sagas%20%7C%20HITL%20%7C%20Guardrails%20%7C%20OTel%20Tracing-00897B)](./chapter-10-agentic-evaluation-and-observability.md)
-[![Assessment Quiz](https://img.shields.io/badge/Self--Assessment-50%20Scenario%20MCQs-EA4335)](./chapter-12-mcq-assessment-and-case-studies.md)
+[![Assessment Quiz](https://img.shields.io/badge/Self--Assessment-80%20Scenario%20MCQs-EA4335)](./chapter-18-mcq-assessment-and-case-studies.md)
 [![Medium](https://img.shields.io/badge/Medium-@rajdipch-black?logo=medium&logoColor=white)](https://medium.com/@rajdipch)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 > ⭐ *If you find this architectural reference handbook helpful for designing, interviewing, or building production multi-agent systems, please **star this repository**!*
 
-A complete, framework-agnostic **12-chapter engineering handbook** on **Agentic AI Orchestration & Systems Engineering**. Every topic progresses from **Beginner** to **Intermediate** to **Advanced / Production Architect**, covering:
+A complete, framework-agnostic **18-chapter engineering handbook** on **Agentic AI Orchestration & Systems Engineering**. Every topic progresses from **Beginner** to **Intermediate** to **Advanced / Production Architect**, covering:
 * **10 Core Orchestration Topologies (Chapters 1–5):** ReAct, Plan-and-Execute, Grounded Reflexion, Tree-of-Thoughts, Sequential Pipelines, Parallel Sectioning/Voting, Multi-Intent Routers, Orchestrator–Workers, Evaluator–Optimizer, Hierarchical Supervisors, Peer-to-Peer Swarms, Blackboards, and Multi-Agent Debate.
-* **5 Deep-Dive Capability Pillars (Chapters 6–10):** **Tool Calling & Action Engineering**, **Agentic RAG & GraphRAG**, **Agent Skills (`SKILL.md`) & Progressive Disclosure**, **Model Context Protocol (MCP) & A2A Interoperability**, and **Agentic Evaluation (Evals) & Observability**.
-* **Production State, Frameworks & Self-Assessment (Chapters 11–12):** Durable HITL Checkpointing, Master Decision Matrix, Concrete Code Idioms across **Google ADK**, **LangGraph**, **CrewAI**, **Microsoft AutoGen / Agent Framework**, and **OpenAI Agents SDK**, plus **50 Scenario-Based MCQs** in the final chapter.
+* **11 Deep-Dive Engineering & Protocol Pillars (Chapters 6–16):**
+  * **Tool Calling & `CodeAct` (Ch 6)** · **Agentic RAG & GraphRAG (Ch 7)** · **Agent Skills & Progressive Disclosure (Ch 8)**
+  * **MCP & A2A Interoperability (Ch 9)** · **Agentic Evals & `pass^k` Reliability (Ch 10)** · **Context Engineering & Long-Term Memory (Ch 11)**
+  * **Security, Identity (`OAuth 2.1 OBO`), `CaMeL` & Sandboxing (Ch 12)** · **Agentic FinOps & Tokenomics (`TBOM` / `CpO`) (Ch 13)**
+  * **Multimodal Live Streaming & Computer-Use (`SoM`) Agents (Ch 14)** · **Frontend UX & Commerce Protocols (`AG-UI`, `A2UI`, `AP2/A2P`) (Ch 15)**
+  * **The Agent Quality Flywheel & Model Distillation (`SFT`/`DPO`/`RFT`) (Ch 16)**
+* **Production State, Frameworks & Self-Assessment (Chapters 17–18):** Durable HITL Checkpointing, Master Decision Matrix, Concrete Code Idioms across **Google ADK**, **LangGraph**, **CrewAI**, **Microsoft AutoGen / Agent Framework**, and **OpenAI Agents SDK**, plus **80 Scenario-Based MCQs** in the final chapter.
 
 ---
 
 **Contents**
 | | |
 | :--- | :--- |
-| [📚 12-Chapter Curriculum & Learning Path](#-12-chapter-curriculum--learning-path) | [📊 At-a-Glance Pattern Comparison Matrix](#at-a-glance-pattern-comparison-matrix) |
+| [📚 18-Chapter Curriculum & Learning Path](#-18-chapter-curriculum--learning-path) | [📊 At-a-Glance Pattern Comparison Matrix](#at-a-glance-pattern-comparison-matrix) |
 | [🧭 The Spectrum of Agency & Golden Rule](#the-spectrum-of-agency--the-golden-rule) | [🛠️ Framework Selection Cheat Sheet](#framework-selection-cheat-sheet) |
-| [📐 The Quantitative Laws of Orchestration](#the-quantitative-engineering-laws-of-orchestration) | [🧱 The 5 Core Agentic Capability Pillars](#the-5-core-agentic-capability-pillars-chapters-610) |
-| [🌳 Master Architecture Decision Tree](#master-architecture-decision-tree) | [🎯 Test Your Mastery (50 Scenario MCQs)](#-test-your-mastery-50-scenario-mcqs) |
+| [📐 The Quantitative Laws of Orchestration](#the-quantitative-engineering-laws-of-orchestration) | [🌐 The 4-Plane Agent Protocol Stack](#the-4-plane-enterprise-agent-protocol-stack) |
+| [🌳 Master Architecture Decision Tree](#master-architecture-decision-tree) | [🎯 Test Your Mastery (80 Scenario MCQs)](#-test-your-mastery-80-scenario-mcqs) |
 
 ---
 
-## 📚 12-Chapter Curriculum & Learning Path
+## 📚 18-Chapter Curriculum & Learning Path
 
 Every chapter traces one recurring enterprise scenario (*"AcmeCloud Incident & Billing SLA Resolution"*) from Beginner to Advanced alongside distinct real-world industry examples:
 
@@ -40,13 +45,19 @@ Every chapter traces one recurring enterprise scenario (*"AcmeCloud Incident & B
 | **03** | **[Deterministic Multi-Agent Workflows](./chapter-03-deterministic-multi-agent-workflows.md)** | 🟡 Intermediate I | The **4 Multi-Agent Splitting Triggers**, **2.1 Sequential Chaining & Deterministic Code Gates**, **2.2 Parallelization (Sectioning vs. Voting Ensembles)**, and **2.3 Multi-Intent Routing**. |
 | **04** | **[Dynamic & Hierarchical Orchestration](./chapter-04-dynamic-and-hierarchical-orchestration.md)** | 🟠 Intermediate II | **3.1 Orchestrator–Workers** (Dynamic Map-Reduce with Semaphore bounds), **3.2 Evaluator–Optimizer** (Adversarial Generator–Critic), and **3.3 Hierarchical Supervisor** (`AgentTool` vs. Graph Router & solving the "Telephone Game"). |
 | **05** | **[Decentralized & Emergent Topologies](./chapter-05-decentralized-and-emergent-topologies.md)** | 🔴 Advanced | **4.1 Peer-to-Peer Handoffs / Swarms** (with cycle-breaker sets), **4.2 Blackboard Architecture** (Shared State & deduplicated event triggers), and **4.3 Multi-Agent Debate / Society of Minds**. |
-| **06** | **[Tool Calling & Action Engineering](./chapter-06-tool-calling-and-action-engineering.md)** | 🟢 $\rightarrow$ 🔴 | **Beginner:** Brain vs. Hands execution boundary, Parallel vs. Sequential calls.<br/>**Intermediate:** ACI design, constrained schemas, actionable error-as-observation.<br/>**Advanced:** Dynamic Tool-RAG (400+ tools), `CodeAct` sandboxes, OAuth scoping, Idempotency & **Agentic Sagas**. |
+| **06** | **[Tool Calling & Action Engineering](./chapter-06-tool-calling-and-action-engineering.md)** | 🟢 $\rightarrow$ 🔴 | **Beginner:** Brain vs. Hands boundary, Parallel vs. Sequential tool calls.<br/>**Intermediate:** ACI design, constrained schemas, actionable error-as-observation.<br/>**Advanced:** Dynamic Tool-RAG (400+ tools), `CodeAct` sandboxes, Idempotency & **Agentic Sagas**. |
 | **07** | **[Agentic RAG & Knowledge Grounding](./chapter-07-agentic-rag-and-knowledge-grounding.md)** | 🟢 $\rightarrow$ 🔴 | **Beginner:** Why Naive RAG fails, Hybrid BM25 + Vector + Reranking, Retrieval-as-a-Tool.<br/>**Intermediate:** Multi-hop Query Decomposition, **Corrective RAG (CRAG)**, and **Self-RAG** (`[IsRel]`, `[IsSup]`, `[IsUse]`).<br/>**Advanced:** **GraphRAG** (Property Graphs + Community Summaries) & **Multi-Agent Federated RAG**. |
 | **08** | **[Agent Skills & Procedural Memory](./chapter-08-agent-skills-and-procedural-memory.md)** | 🟢 $\rightarrow$ 🔴 | **Beginner:** `SKILL.md` anatomy (`name`, `description`, `scripts/`, `references/`) vs. Tools vs. RAG.<br/>**Intermediate:** **3-Tier Progressive Disclosure** (cutting idle prompt overhead by $>95\%$).<br/>**Advanced:** **Router Skills**, deterministic script offloading, semantic `skill_search`, & **With-vs-Without Ablation Evals**. |
-| **09** | **[Model Context Protocol (MCP) & A2A](./chapter-09-mcp-and-a2a-interoperability.md)** | 🟢 $\rightarrow$ 🔴 | **Beginner:** Solving $N \times M$ integration; MCP Host/Client/Server & `Tools`, `Resources`, `Prompts`.<br/>**Intermediate:** `stdio` vs. `Streamable HTTP`, JSON-RPC lifecycle, **Eager vs. Lazy Tool Schema Loading**.<br/>**Advanced:** `Sampling` & `Elicitation`, MCP Security (Tool Poisoning, Rug Pulls, OAuth 2.1), & **A2A Protocol** (`AgentCard`, `Task` lifecycle). |
-| **10** | **[Agentic Evaluation (Evals) & Observability](./chapter-10-agentic-evaluation-and-observability.md)** | 🟢 $\rightarrow$ 🔴 | **Beginner:** The **3 Eval Pillars** (Trajectory Accuracy, Outcome Quality, FinOps CpO).<br/>**Intermediate:** Trajectory modes (`EXACT`, `IN_ORDER`, `ANY_ORDER`), **4-Tier Golden Datasets**, Binary Rubric Judges.<br/>**Advanced:** **`pass^k` vs. `pass@k` consistency**, Hermetic Sandboxes, **Persona User Simulators**, & **The Quality Flywheel**. |
-| **11** | **[Production State, HITL & Framework Survey](./chapter-11-production-state-hitl-and-frameworks.md)** | 🔵 Ecosystem | Typed State Scoping & **Pass-by-Reference Artifact Pointers**, **Durable HITL Checkpointing & Time-Travel**, Master Decision Tree, Comparison Matrix, and concrete code idioms across **Google ADK**, **LangGraph**, **CrewAI**, **AutoGen (AG2)**, and **OpenAI Agents SDK**. |
-| **12** | **[Architectural Mastery Quiz (50 MCQs)](./chapter-12-mcq-assessment-and-case-studies.md)** | 🎓 Final Chapter | **50 Scenario-Based Multiple-Choice Questions** (Beginner $\rightarrow$ Advanced) covering every orchestration topology and capability pillar with detailed explanations and distractor analysis. |
+| **09** | **[Model Context Protocol (MCP) & A2A](./chapter-09-mcp-and-a2a-interoperability.md)** | 🟢 $\rightarrow$ 🔴 | **Beginner:** Solving $N \times M$ integration; MCP Host/Client/Server & `Tools`, `Resources`, `Prompts`.<br/>**Intermediate:** `stdio` vs. `Streamable HTTP`, JSON-RPC lifecycle, **Eager vs. Lazy Tool Schema Loading**.<br/>**Advanced:** `Sampling` & `Elicitation`, MCP Security, & **A2A Protocol** (`AgentCard`, `Task` lifecycle). |
+| **10** | **[Agentic Evaluation (Evals) & Observability](./chapter-10-agentic-evaluation-and-observability.md)** | 🟢 $\rightarrow$ 🔴 | **Beginner:** The **3 Eval Pillars** (Trajectory Accuracy, Outcome Quality, FinOps CpO).<br/>**Intermediate:** Trajectory modes (`EXACT`, `IN_ORDER`, `ANY_ORDER`), **4-Tier Golden Datasets**, Binary Rubric Judges.<br/>**Advanced:** **`pass^k` vs. `pass@k` consistency**, Hermetic Sandboxes, **Persona User Simulators**, & OTel Tracing. |
+| **11** | **[Context Engineering & Long-Term Memory](./chapter-11-context-engineering-and-long-term-memory.md)** | 🟢 $\rightarrow$ 🔴 | **Beginner:** "Lost in the Middle" recall curve, Canonical Context Window Layout (Static Prefix $\rightarrow$ Recency Suffix).<br/>**Intermediate:** Observation Masking, Artifact Pointers & Watermark Summarization.<br/>**Advanced:** **OS Virtual Memory (`MemGPT`)**, **Bi-Temporal Knowledge Graphs (`valid_from`/`to`)**, & Async Consolidation. |
+| **12** | **[Agentic Security, Identity & Sandboxing](./chapter-12-agentic-security-identity-and-sandboxing.md)** | 🟢 $\rightarrow$ 🔴 | **Beginner:** Indirect Prompt Injection, Simon Willison's **"Lethal Trifecta"**, Markdown image exfiltration & CSP.<br/>**Intermediate:** Parallel Tripwire Guardrails & **Dual-LLM Privilege Separation (`CaMeL`) + Taint Tracking**.<br/>**Advanced:** **OAuth 2.1 On-Behalf-Of (`sub`+`act`) + DB RLS**, and **gVisor / Firecracker MicroVM / Wasm Sandboxes**. |
+| **13** | **[Agentic FinOps & Tokenomics](./chapter-13-agentic-finops-and-tokenomics.md)** | 🟢 $\rightarrow$ 🔴 | **Beginner:** **Token Bill of Materials (TBOM)**, **Cost per Validated Outcome (CpO)**, Thinking token billing, `TTFT`/`TPOT`/`TCT`.<br/>**Intermediate:** **The 6 High-Leverage Tokenomics Levers** (Prefix KV-Cache, Model Tiering, Adaptive Thinking, Lazy Schemas).<br/>**Advanced:** **`TokenBudgetEnforcer` Circuit Breakers** & **Hybrid PTU/GSU + PAYGO + Batch API Sizing**. |
+| **14** | **[Multimodal, Computer-Use & Streaming Agents](./chapter-14-multimodal-computer-use-and-streaming-agents.md)** | 🟢 $\rightarrow$ 🔴 | **Beginner:** Legacy Cascaded Voice (`STT->LLM->TTS`) vs. **Native Multimodal Bidirectional Streaming**.<br/>**Intermediate:** **Computer-Use Agents (CUA)**, **Set-of-Mark (SoM) Grounding**, & Post-Action Visual Verification.<br/>**Advanced:** **Full-Duplex Barge-In Buffer Flush**, **Non-Blocking Async Tool Injection**, & $pHash$ Frame Gating. |
+| **15** | **[Agent-to-Frontend UX & Commerce Protocols](./chapter-15-agent-to-frontend-ux-and-commerce-protocols.md)** | 🟢 $\rightarrow$ 🔴 | **Beginner:** The **3 Tiers of Generative UI** (Mapped Components, Declarative `A2UI`, Sandboxed `iframe`).<br/>**Intermediate:** **AG-UI Bidirectional Event Stream** & **`STATE_DELTA` (RFC 6902 JSON Patch)** Co-Pilot Canvases.<br/>**Advanced:** **AP2 / A2P (Agent Payments Protocol)** Cryptographic `IntentMandate` & `CartMandate` + **The 4-Protocol Stack**. |
+| **16** | **[The Agent Quality Flywheel & Distillation](./chapter-16-agent-quality-flywheel-and-distillation.md)** | 🟢 $\rightarrow$ 🔴 | **Beginner:** The **5-Stage Closed-Loop Flywheel** & mining implicit failure signals (user retries, HITL edits, high steps).<br/>**Intermediate:** **Step-Level Fault Attribution Waterfall** & Automated Prompt/Skill Evolution (`BootstrapFewShot`/`TextGrad`).<br/>**Advanced:** **Trajectory Distillation (Frontier $\rightarrow$ Flash)** via SFT, **Self-Healed DPO Pairs**, & Shadow Cascades. |
+| **17** | **[Production State, HITL & Framework Survey](./chapter-17-production-state-hitl-and-frameworks.md)** | 🔵 Ecosystem | Typed State Scoping, **Durable HITL Checkpointing & Time-Travel**, Master Decision Tree, Comparison Matrix, and concrete code idioms across **Google ADK**, **LangGraph**, **CrewAI**, **AutoGen (AG2)**, and **OpenAI Agents SDK**. |
+| **18** | **[Architectural Mastery Quiz (80 MCQs)](./chapter-18-mcq-assessment-and-case-studies.md)** | 🎓 Final Chapter | **80 Scenario-Based Multiple-Choice Questions** (Beginner $\rightarrow$ Advanced) covering all 17 chapters with detailed explanations and distractor analysis. |
 
 ---
 
@@ -80,25 +91,29 @@ Why not chain 15 autonomous agents together in one shared conversation history? 
 
 ---
 
-## 🧱 The 5 Core Agentic Capability Pillars (Chapters 6–10)
+## 🌐 The 4-Plane Enterprise Agent Protocol Stack
 
-Beyond graph topology, production agents rely on five foundational engineering pillars—each covered from Beginner to Advanced in its own dedicated chapter:
+Modern enterprise agent architectures standardize communication across four non-overlapping protocol planes (detailed in [Chapter 9](./chapter-09-mcp-and-a2a-interoperability.md) and [Chapter 15](./chapter-15-agent-to-frontend-ux-and-commerce-protocols.md)):
 
 ```mermaid
 flowchart TD
-    Agent["Production Agentic AI System"]
-    Agent --> P1["Ch 06: Tool Calling & Action Eng.\n• ACI Schema Design\n• Dynamic Tool-RAG & CodeAct\n• Idempotency & Agentic Sagas"]
-    Agent --> P2["Ch 07: Agentic RAG & Grounding\n• Hybrid + Cross-Encoder Rerank\n• Corrective RAG (CRAG) & Self-RAG\n• GraphRAG & Federated SQL/Vector"]
-    Agent --> P3["Ch 08: Agent Skills (SKILL.md)\n• Procedural Memory Playbooks\n• 3-Tier Progressive Disclosure\n• Script Offloading & Ablation Evals"]
-    Agent --> P4["Ch 09: MCP & A2A Protocols\n• MCP Vertical (Tools/Resources/Sampling)\n• Lazy Schema Hydration & OAuth 2.1\n• A2A Horizontal (AgentCard & Tasks)"]
-    Agent --> P5["Ch 10: Agentic Evals & Observability\n• Trajectory (IN_ORDER) + Outcome + CpO\n• 4-Tier Datasets & pass^k Reliability\n• Hermetic Sandboxes & User Simulators"]
+    Human["👤 Human User / Co-Pilot Frontend"]
+
+    subgraph Orch["Primary Enterprise Agent (e.g., Google ADK / LangGraph)"]
+        Core["Orchestrator, Skills & Context Engine"]
+    end
+
+    Human <== "1. AG-UI & A2UI (Northbound UX Plane)\nStreaming Events, JSON Patch STATE_DELTA, Declarative Widgets" ==> Core
+    Core <== "2. A2A Protocol (East-West Peer Plane)\nAgentCard Discovery, Stateful Tasks, Opaque Multi-Agent Collaboration" ==> Peer["🤖 Remote Partner / Vendor Agent"]
+    Core <== "3. MCP Protocol (Southbound Tool/Data Plane)\nJSON-RPC Tools, URI Resources, Prompts, Sampling" ==> Tools["🔧 Internal DBs, APIs & MicroVM Sandboxes"]
+    Core <== "4. AP2 / A2P Protocol (Commerce & Trust Plane)\nCryptographic IntentMandates, CartMandates & Tokenized Settlement" ==> Pay["💳 Payment Network / Issuing Bank / Merchant"]
 ```
 
 ---
 
 ## 🌳 Master Architecture Decision Tree
 
-Use this flowchart (from [Chapter 11](./chapter-11-production-state-hitl-and-frameworks.md)) to pick the right orchestration topology in 30 seconds:
+Use this flowchart (from [Chapter 17](./chapter-17-production-state-hitl-and-frameworks.md)) to pick the right orchestration topology in 30 seconds:
 
 ```mermaid
 flowchart TD
@@ -148,7 +163,7 @@ Let $L$ be the average latency of a single LLM call, $K$ be the number of loop i
 
 ## 🛠️ Framework Selection Cheat Sheet
 
-Full code examples and architectural mappings are provided in [Chapter 11](./chapter-11-production-state-hitl-and-frameworks.md):
+Full code examples and architectural mappings are provided in [Chapter 17](./chapter-17-production-state-hitl-and-frameworks.md):
 
 | Primary Engineering Requirement | Recommended Framework | Key Orchestration Primitives |
 | :--- | :--- | :--- |
@@ -160,9 +175,9 @@ Full code examples and architectural mappings are provided in [Chapter 11](./cha
 
 ---
 
-## 🎯 Test Your Mastery (50 Scenario MCQs)
+## 🎯 Test Your Mastery (80 Scenario MCQs)
 
-Ready to validate your architectural judgment across all 11 chapters? Jump to the final chapter: **[Chapter 12: Architectural Mastery Quiz (50 Scenario-Based MCQs)](./chapter-12-mcq-assessment-and-case-studies.md)** for 50 real-world system design questions with complete answers and distractor explanations.
+Ready to validate your architectural judgment across all 17 chapters? Jump to the final chapter: **[Chapter 18: Architectural Mastery Quiz (80 Scenario-Based MCQs)](./chapter-18-mcq-assessment-and-case-studies.md)** for 80 real-world system design questions with complete answers and distractor explanations.
 
 ---
 
