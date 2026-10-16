@@ -1,22 +1,23 @@
-# Chapter 5 (Advanced): Decentralized & Emergent Multi-Agent Topologies
+# Chapter 5 (Advanced): Decentralized and Emergent Multi-Agent Topologies
 
-[⬅️ Previous: Chapter 4 — Dynamic & Hierarchical Orchestration](./chapter-04-dynamic-and-hierarchical-orchestration.md) | [📚 Book Index](./README.md) | [Next: Chapter 6 — Tool Calling & Action Engineering ➡️](./chapter-06-tool-calling-and-action-engineering.md)
-
----
-
-In Chapter 4, every dynamic decision flowed through a central brain (an Orchestrator or Supervisor). At the **Advanced** level, we explore **Decentralized and Emergent Topologies**—architectures that remove (or shrink) the central supervisor for low-latency multi-turn conversations, asynchronous collaborative diagnostics, or high-stakes multi-perspective consensus.
-
-> **Numbering note:** Pattern numbers follow the book's multi-agent pattern catalog (1.x single-agent loops → 2.x deterministic workflows → 3.x dynamic/hierarchical → **4.x decentralized**), not the chapter number.
-
-> **Before you decentralize — a 2025 reality check:** Removing the hub does not remove the coordination problem; it moves it into handoff notes, shared state, and termination rules. Cognition's essay *"Don't Build Multi-Agents"* (Walden Yan, June 2025) argues that agents working from fragmented context make conflicting implicit decisions, while Anthropic's *"How we built our multi-agent research system"* (June 2025) shows multi-agent wins on breadth-first, read-heavy research—at a much higher token cost. The MAST taxonomy (*"Why Do Multi-Agent LLM Systems Fail?"*, Cemri et al., 2025) groups observed failures into **system-design/specification issues**, **inter-agent misalignment** (e.g., information withholding, ignored peer input), and **task verification & termination** failures. Every pattern below includes an explicit guardrail for at least one of these.
+[← Previous: Chapter 4 — Dynamic & Hierarchical Orchestration](./chapter-04-dynamic-and-hierarchical-orchestration.md) | [Book Index](./README.md) | [Next: Chapter 6 — Tool Calling & Action Engineering →](./chapter-06-tool-calling-and-action-engineering.md)
 
 ---
 
-## Pattern 4.1: Peer-to-Peer Handoffs / Decentralized Swarm
-*Specialist agents transfer active execution control directly to peer specialists without routing back through a central hub.*
+In Chapter 4, every dynamic decision went through a central brain, either an Orchestrator or a Supervisor. This chapter covers the Advanced case: **decentralized and emergent topologies**, which remove the central supervisor or shrink it. You reach for them when you need low-latency multi-turn conversations, asynchronous collaborative diagnostics, or a consensus drawn from several perspectives on a high-stakes call.
+
+A note on numbering: pattern numbers follow the book's multi-agent pattern catalog (1.x single-agent loops, 2.x deterministic workflows, 3.x dynamic/hierarchical, 4.x decentralized), not the chapter number.
+
+> [!WARNING]
+> Before you decentralize, a 2025 reality check. Removing the hub doesn't remove the coordination problem. It moves it into handoff notes, shared state, and termination rules. Cognition's essay *"Don't Build Multi-Agents"* (Walden Yan, June 2025) argues that agents working from fragmented context make conflicting implicit decisions. Anthropic's *"How we built our multi-agent research system"* (June 2025) shows multi-agent setups winning on breadth-first, read-heavy research, at a much higher token cost. The MAST taxonomy (*"Why Do Multi-Agent LLM Systems Fail?"*, Cemri et al., 2025) sorts observed failures into system-design/specification issues, inter-agent misalignment (information withholding, ignored peer input), and task verification and termination failures. Each pattern below comes with an explicit guardrail for at least one of these.
+
+---
+
+## Pattern 4.1: Peer-to-peer handoffs (decentralized swarm)
+*Specialist agents pass active execution control straight to a peer specialist, without routing back through a central hub.*
 
 ### Architecture
-At any point in time, exactly **one specialist agent holds the active pointer** (the "microphone") and interacts directly with the user or environment. Alongside its domain tools, each agent is given **Handoff Tools** (e.g., `transfer_to_billing_agent`, `transfer_to_infra_agent`). When the active agent determines another specialist is needed, it invokes a handoff tool; the runtime updates `active_agent` and passes the shared session state (conversation history plus a structured handoff note) directly to the peer.
+At any moment exactly one specialist holds the active pointer (think of it as the microphone) and talks directly to the user or the environment. Besides its domain tools, each agent gets **handoff tools** such as `transfer_to_billing_agent` or `transfer_to_infra_agent`. When the active agent decides another specialist is needed, it calls a handoff tool. The runtime then updates `active_agent` and passes the shared session state (conversation history plus a structured handoff note) directly to the peer.
 
 ```mermaid
 stateDiagram-v2
@@ -30,30 +31,34 @@ stateDiagram-v2
     HumanEscalation --> [*]: Ticket Escalated
 ```
 
-### Why This Architecture?
-* **Why use it over a Hierarchical Supervisor (Pattern 3.3):**
-  1. **Can Roughly Halve Per-Turn Latency & Cost in Conversational Apps:** In a Supervisor architecture, every user message in a 6-turn troubleshooting chat travels $\text{User} \rightarrow \text{Supervisor} \rightarrow \text{Specialist} \rightarrow \text{Supervisor} \rightarrow \text{User}$ (typically 2–3 LLM calls per turn). In a **Peer-to-Peer Swarm**, once `TriageAgent` transfers to `InfraAgent`, the user talks **directly** to `InfraAgent` for the next 6 turns at **1 agent loop per turn** (plus any tool calls that agent makes).
-  2. **Natural Specialist Persona Continuity:** The user experiences speaking directly with a specialist rather than a middleman paraphrasing answers.
-* **Trade-offs & Failure Modes:**
-  * **Infinite Handoff Ping-Pong ($A \leftrightarrow B$ Cycle):** `InfraAgent` thinks an error is a billing quota problem and calls `transfer_to_billing()`, while `BillingAgent` thinks it is a server bug and calls `transfer_to_infra()` in an infinite loop.
-  * **Critic's Fix — Cycle Breaker in Code:** Track `visited_edges: set[tuple[str, str]]` within a single user turn; if a directed edge `(source_agent, target_agent)` repeats within the same turn without new user input, block the handoff and force synthesis or escalation. Note that a single legitimate round trip ($A \rightarrow B \rightarrow A$) is allowed; only a *repeated* directed edge is blocked.
-  * **No Global Owner of the Goal:** Nobody is accountable for the *overall* task once control has moved twice. Mitigate with a typed handoff note (goal, findings so far, open questions) and a human-escalation agent reachable from every node.
+### When it beats a hierarchical supervisor
+Compared with a Hierarchical Supervisor (Pattern 3.3), a swarm can roughly halve per-turn latency and cost in conversational apps. With a supervisor, every user message in a 6-turn troubleshooting chat travels $\text{User} \rightarrow \text{Supervisor} \rightarrow \text{Specialist} \rightarrow \text{Supervisor} \rightarrow \text{User}$, which is typically 2–3 LLM calls per turn. In a peer-to-peer swarm, once `TriageAgent` transfers to `InfraAgent`, the user talks to `InfraAgent` directly for the next 6 turns, at one agent loop per turn plus whatever tool calls that agent makes.
 
-### What Context Does the Receiving Agent See?
-This is the most under-specified design decision in swarms. Options, from most to least context:
-* **Full shared history (default in most frameworks):** Maximum continuity, but the receiver inherits the sender's tool noise and persona instructions, inflating tokens and sometimes confusing the new agent.
-* **Filtered history:** Strip prior tool calls/outputs or internal scratchpads before transfer (e.g., the OpenAI Agents SDK's `handoff(agent, input_filter=...)` with built-ins such as `handoff_filters.remove_all_tools`).
-* **Summary-only handoff note:** Cheapest, but every summary is lossy—exactly the context fragmentation Cognition warns about. Keep the raw history retrievable even if you don't inject it.
+There's also a softer benefit. The user feels they're speaking with the specialist, not with a middleman paraphrasing someone else's answers.
 
-### Framework Mapping (verify against your installed version)
+### Failure modes and fixes
+The classic failure is infinite handoff ping-pong (an $A \leftrightarrow B$ cycle). `InfraAgent` decides an error is a billing quota problem and calls `transfer_to_billing()`; `BillingAgent` decides it's a server bug and calls `transfer_to_infra()`; and round it goes.
+
+Break the cycle in code, not in the prompt. Track `visited_edges: set[tuple[str, str]]` within a single user turn. If a directed edge `(source_agent, target_agent)` repeats within that turn without new user input, block the handoff and force the agent to synthesize an answer or escalate. A single legitimate round trip ($A \rightarrow B \rightarrow A$) is still allowed; only a *repeated* directed edge gets blocked.
+
+The second problem is that nobody owns the overall goal once control has moved twice. Mitigate it with a typed handoff note (goal, findings so far, open questions) and a human-escalation agent that every node can reach.
+
+### What context does the receiving agent see?
+This is the most under-specified design decision in swarms. You have three options, from most context to least.
+
+- **Full shared history** is the default in most frameworks. You get maximum continuity, but the receiver also inherits the sender's tool noise and persona instructions, which inflates tokens and sometimes confuses the new agent.
+- **Filtered history** strips prior tool calls and outputs, or internal scratchpads, before the transfer. The OpenAI Agents SDK does this with `handoff(agent, input_filter=...)` and built-ins such as `handoff_filters.remove_all_tools`.
+- **A summary-only handoff note** is the cheapest. But every summary is lossy, and that's exactly the context fragmentation Cognition warns about. Keep the raw history retrievable even if you don't inject it.
+
+### Framework mapping (verify against your installed version)
 | Framework | Peer handoff mechanism |
 | :--- | :--- |
-| **OpenAI Agents SDK** (successor to the experimental 2024 *Swarm* library) | `Agent(handoffs=[billing_agent, infra_agent])`; each handoff is exposed to the model as a tool named `transfer_to_<agent_name>` by default; customize via `handoff(..., tool_name_override=..., input_filter=...)`. |
-| **LangGraph** | A tool or node returns `Command(goto="billing_agent", update={...})`; the prebuilt `langgraph-swarm` package (`create_swarm`, `create_handoff_tool`) tracks `active_agent` across turns with a checkpointer. |
-| **Google ADK** | `LlmAgent(sub_agents=[...])` lets the model call `transfer_to_agent(agent_name=...)`; constrain the graph with `disallow_transfer_to_parent` / `disallow_transfer_to_peers`. |
-| **Microsoft Agent Framework** | Built-in **handoff orchestration** (alongside sequential, concurrent, group-chat, and Magentic orchestrations), succeeding AutoGen's `Swarm` team. |
+| OpenAI Agents SDK (successor to the experimental 2024 *Swarm* library) | `Agent(handoffs=[billing_agent, infra_agent])`; each handoff is exposed to the model as a tool named `transfer_to_<agent_name>` by default; customize via `handoff(..., tool_name_override=..., input_filter=...)`. |
+| LangGraph | A tool or node returns `Command(goto="billing_agent", update={...})`; the prebuilt `langgraph-swarm` package (`create_swarm`, `create_handoff_tool`) tracks `active_agent` across turns with a checkpointer. |
+| Google ADK | `LlmAgent(sub_agents=[...])` lets the model call `transfer_to_agent(agent_name=...)`; constrain the graph with `disallow_transfer_to_parent` / `disallow_transfer_to_peers`. |
+| Microsoft Agent Framework | Built-in handoff orchestration (alongside sequential, concurrent, group-chat, and Magentic orchestrations), succeeding AutoGen's `Swarm` team. |
 
-### Production-Grade Framework-Agnostic Pseudocode
+### Framework-agnostic pseudocode
 ```python
 def swarm_turn_runner(
     user_message: str,
@@ -85,23 +90,26 @@ def swarm_turn_runner(
         session_state["handoff_context"] = step_result.handoff_note
         active_agent = step_result.handoff_target
 ```
-The loop always terminates: every iteration either returns or adds a new edge, and the edge set is capped at `max_handoffs_per_turn`.
+The loop always terminates. Every iteration either returns or adds a new edge, and the edge set is capped at `max_handoffs_per_turn`.
 
-### Runtime Execution Trace (Running Scenario)
-1. **User** sends ticket $\rightarrow$ **`TriageAgent`** is active $\rightarrow$ immediately invokes `transfer_to_infra(note="Investigate 503s after yesterday's deploy; user also asked about SLA credit")`.
-2. **`InfraAgent`** becomes active $\rightarrow$ calls `get_deployments` and `query_logs` $\rightarrow$ writes `session_state["downtime_mins"] = 42` and `session_state["root_cause"] = "Deploy #842 DB pool=5"` $\rightarrow$ invokes `transfer_to_billing(note="Infra RCA complete (42m downtime). Compute SLA eligibility and respond to user")`.
-3. **`BillingAgent`** becomes active $\rightarrow$ checks SLA policy (`42m < 45m`) and replies directly to the user with both the Infra root cause and SLA determination. If the user replies *"Can I appeal the SLA decision?"*, **`BillingAgent` is still the active agent** and answers immediately in 1 hop!
+### Runtime trace (running scenario)
+1. The user sends a ticket $\rightarrow$ `TriageAgent` is active $\rightarrow$ it immediately calls `transfer_to_infra(note="Investigate 503s after yesterday's deploy; user also asked about SLA credit")`.
+2. `InfraAgent` becomes active $\rightarrow$ calls `get_deployments` and `query_logs` $\rightarrow$ writes `session_state["downtime_mins"] = 42` and `session_state["root_cause"] = "Deploy #842 DB pool=5"` $\rightarrow$ calls `transfer_to_billing(note="Infra RCA complete (42m downtime). Compute SLA eligibility and respond to user")`.
+3. `BillingAgent` becomes active $\rightarrow$ checks the SLA policy (`42m < 45m`) and replies to the user directly with both the infra root cause and the SLA determination. If the user then asks *"Can I appeal the SLA decision?"*, `BillingAgent` is still the active agent and answers in one hop.
 
 ---
 
-## Pattern 4.2: Blackboard Architecture (Shared Memory / Event-Driven Pub-Sub)
-*Agents are decoupled from each other: they never message each other directly, instead reading from and writing structured evidence to a central Shared Blackboard. Their only coupling is to the board's schema.*
+## Pattern 4.2: Blackboard architecture (shared memory, event-driven pub-sub)
+*Agents never message each other. They read from and write structured evidence to a central shared blackboard, and the board's schema is their only coupling.*
 
 ### Architecture
-Originating in classic AI (the HEARSAY-II speech-understanding system, CMU, 1970s) and echoed in modern event-driven systems:
-* **The Blackboard:** A central, versioned, strongly-typed shared state store containing `verified_facts`, `active_hypotheses`, `evidence_artifacts`, and `open_questions`.
-* **Knowledge Sources (Specialist Agents):** Independent domain agents that declare a **Trigger Precondition** (what state must exist on the board before they can contribute).
-* **The Controller / Scheduler:** Inspects the Blackboard after each state mutation, identifies all specialists whose preconditions are newly satisfied, runs them concurrently, and merges their state patches onto the board. The controller can be deterministic rules (cheap, auditable) or an LLM that chooses which knowledge source to activate next (flexible, but reintroduces a soft central brain).
+The idea comes from classic AI (the HEARSAY-II speech-understanding system, CMU, 1970s) and shows up again in modern event-driven systems. It has three parts.
+
+The **blackboard** is a central, versioned, strongly typed state store holding `verified_facts`, `active_hypotheses`, `evidence_artifacts`, and `open_questions`.
+
+The **knowledge sources** are independent specialist agents. Each declares a trigger precondition: the state that must exist on the board before it can contribute.
+
+The **controller** (or scheduler) inspects the board after each state change, finds every specialist whose precondition has just become true, runs them concurrently, and merges their state patches onto the board. It can be a set of deterministic rules, which is cheap and auditable, or an LLM that picks which knowledge source to activate next. The LLM version is more flexible but quietly reintroduces a soft central brain.
 
 ```mermaid
 flowchart TD
@@ -124,14 +132,21 @@ flowchart TD
     A4 -- "Writes Final Resolution" --> Blackboard
 ```
 
-### Why This Architecture?
-* **Eliminates $O(N^2)$ Point-to-Point Coupling:** If 10 specialist agents need to collaborate on an unstructured problem (like diagnosing a complex multi-system outage), fully meshed point-to-point handoffs allow up to $10 \times 9 = 90$ directed transition edges. With a **Blackboard**, agents don't need to know other agents exist ($O(N)$ coupling to the board schema). You can add an 11th specialist (`DNS_BGP_Agent`) without editing the code or prompts of the existing 10—*provided* the board schema already has a place for its findings (schema changes are the new coupling point, so version the schema).
-* **Opportunistic, Data-Driven Collaboration:** Any agent's discovery on the board can dynamically unlock a different specialist on the next cycle; the execution order emerges from the evidence rather than a fixed plan.
-* **Critic's Fix — Preventing Infinite Re-Triggering, Write Races & Silent Overwrites:**
-  * *The Trap:* If `MetricsAgent`'s precondition is `board.service is not None`, a naive loop will re-run `MetricsAgent` on every single cycle forever! Furthermore, running multiple specialists concurrently can cause races if they overwrite the same key, and a "last writer wins" merge silently destroys contradictory evidence.
-  * *The Solution:* (1) Track `fired_signatures: set[tuple[str, str]]` of `(specialist_name, precondition_hash)` so each specialist only fires once per unique input state; (2) give every specialist in a cycle the **same frozen snapshot** and apply results via **merge reducers** (`board.apply_patch(delta)`) that record conflicting writes as first-class `conflicts` instead of overwriting; (3) if the controller is distributed, use optimistic concurrency (compare-and-set on `board_version`) in the backing store (e.g., a version-checked `UPDATE` in Postgres, Redis `WATCH`/`MULTI`, DynamoDB conditional writes, Cosmos DB ETags, or Firestore transactions).
+### What the blackboard buys you
+The main win is getting rid of $O(N^2)$ point-to-point coupling. Say 10 specialist agents need to collaborate on an unstructured problem, like diagnosing a messy multi-system outage. Fully meshed point-to-point handoffs allow up to $10 \times 9 = 90$ directed transition edges. With a blackboard, agents don't need to know the others exist; each is coupled only to the board schema, which is $O(N)$. You can add an 11th specialist (`DNS_BGP_Agent`) without touching the code or prompts of the other 10, provided the schema already has a place for its findings. Schema changes become the new coupling point, so version the schema.
 
-### Production-Grade Framework-Agnostic Pseudocode
+Collaboration also becomes opportunistic and driven by data. A finding posted by one agent can trigger a different specialist on the next cycle, so the execution order falls out of the evidence instead of a fixed plan.
+
+### Failure modes and fixes
+Three things go wrong in naive implementations. If `MetricsAgent`'s precondition is `board.service is not None`, a simple loop will re-run `MetricsAgent` on every cycle, forever. Running specialists concurrently invites races when two of them write the same key. And a last-writer-wins merge silently throws away contradictory evidence.
+
+The fixes, in order:
+
+1. Track `fired_signatures: set[tuple[str, str]]` of `(specialist_name, precondition_hash)` so each specialist fires only once per unique input state.
+2. Give every specialist in a cycle the same frozen snapshot, and apply results through merge reducers (`board.apply_patch(delta)`) that record conflicting writes as first-class `conflicts` instead of overwriting.
+3. If the controller is distributed, use optimistic concurrency (compare-and-set on `board_version`) in the backing store: a version-checked `UPDATE` in Postgres, Redis `WATCH`/`MULTI`, DynamoDB conditional writes, Cosmos DB ETags, or Firestore transactions.
+
+### Framework-agnostic pseudocode
 ```python
 class BlackboardState(BaseModel):
     ticket: str
@@ -188,16 +203,17 @@ async def run_blackboard(ticket: str, specialists: list[Specialist], max_cycles:
 
 ---
 
-## Pattern 4.3: Multi-Agent Debate / Society of Minds (Consensus)
-*Multiple agents independently propose competing analyses, cross-examine each other's evidence over $K$ rounds, and a Judge renders the final verdict.*
+## Pattern 4.3: Multi-agent debate (society of minds)
+*Several agents independently propose competing analyses, cross-examine each other's evidence over $K$ rounds, and a judge renders the final verdict.*
 
-The core idea comes from Du et al., *"Improving Factuality and Reasoning in Language Models through Multiagent Debate"* (2023; ICML 2024), where several copies of a model answer, read each other's answers, and revise over rounds. The **Judge/Moderator** variant with deliberately opposed debaters comes from Liang et al., *"Encouraging Divergent Thinking in Large Language Models through Multi-Agent Debate"* (2023).
+The core idea comes from Du et al., *"Improving Factuality and Reasoning in Language Models through Multiagent Debate"* (2023; ICML 2024): several copies of a model answer, read each other's answers, and revise over a number of rounds. The variant with a judge (or moderator) and deliberately opposed debaters comes from Liang et al., *"Encouraging Divergent Thinking in Large Language Models through Multi-Agent Debate"* (2023).
 
 ### Architecture
-Designed for **high-stakes, high-ambiguity reasoning** where no deterministic test runner exists:
-1. **Round 1 (Blind Independent Proposals):** $M$ Proposer Agents (configured with orthogonal perspectives/personas or distinct model families) analyze the problem **independently in parallel** without seeing each other's initial output.
-2. **Rounds $2 \dots K$ (Adversarial Cross-Examination & Early Consensus Check):** Each agent inspects its peers' arguments, challenges unsupported assumptions with tool/document evidence, and refines its position. If unanimous consensus is reached, the debate loop terminates immediately.
-3. **Final Adjudication:** An independent **Judge / Aggregator Agent** weighs the final arguments, verifies cited evidence, and outputs the decision alongside any dissenting risk notes.
+Debate is built for high-stakes, highly ambiguous reasoning where no deterministic test runner exists. It runs in three phases.
+
+1. **Round 1, blind proposals.** $M$ proposer agents, set up with orthogonal perspectives or personas (or drawn from different model families), analyze the problem independently and in parallel. None of them sees the others' initial output.
+2. **Rounds $2 \dots K$, cross-examination.** Each agent reads its peers' arguments, challenges unsupported assumptions with tool or document evidence, and refines its own position. If they reach unanimous consensus, the loop stops early.
+3. **Final adjudication.** An independent judge (or aggregator) agent weighs the final arguments, checks the cited evidence, and outputs a decision along with any dissenting risk notes.
 
 ```mermaid
 sequenceDiagram
@@ -225,15 +241,19 @@ sequenceDiagram
     Judge->>Task: Final Verdict + Risk Mitigation Plan
 ```
 
-### Why This Architecture?
-* **Reduces Anchoring Bias:** A single generation tends to commit early to one framing and then rationalize it (extended "thinking" models mitigate this somewhat, but do not eliminate it). **Blind Round 1 generation** forces genuinely independent hypotheses before cross-examination begins.
-* **Exposes Subtle Edge Cases:** Adversarial peers actively hunt for unstated assumptions in each other's proposals—most valuable when they can *verify* claims with tools or documents rather than just argue.
-* **Trade-offs & Failure Modes:**
-  * **Highest Token & Latency Multiplier ($M \text{ agents} \times K \text{ rounds} + 1 \text{ Judge}$):** e.g., 3 agents × 3 rounds + 1 judge ≈ $10\times$ the calls of a single agent (more as transcripts grow each round). Never use Multi-Agent Debate for routine tasks; reserve it for high-consequence architectural, medical, financial, or incident-remediation decisions.
-  * **Debate Often Doesn't Beat Voting at Equal Compute:** Choi, Zhu & Li, *"Debate or Vote: Which Yields Better Decisions in Multi-Agent Large Language Models?"* (NeurIPS 2025) report that across seven NLP benchmarks, **majority voting over independent answers accounts for most of the gains** usually attributed to debate. Always benchmark debate against a cheaper **parallel sample + vote** baseline (Pattern 2.2) before paying for cross-examination rounds; debate earns its keep mainly when peers bring *new evidence* (tools, documents, different models).
-  * **Echo Chamber & Conformity:** Debaters with the same model and prompt make correlated errors, converge quickly, and add little beyond voting; worse, agents may capitulate to a confident or majority peer even when that peer is wrong. Enforce **orthogonal system personas** (e.g., *Pro-Rollback Advocate* vs. *Pro-Hotfix Advocate*) or **multi-model ensembles**, anonymize peer identities in the transcript, and require evidence for any position change.
+### What debate buys you
+It reduces anchoring bias. A single generation tends to commit early to one framing and then rationalize it. Extended "thinking" models soften this somewhat but don't eliminate it. Making Round 1 blind forces genuinely independent hypotheses before any cross-examination starts.
 
-### Production-Grade Framework-Agnostic Pseudocode
+It also surfaces subtle edge cases, because adversarial peers go looking for the unstated assumptions in each other's proposals. That's most valuable when they can *verify* claims with tools or documents rather than just argue.
+
+### Costs and failure modes
+Debate has the highest token and latency multiplier in this chapter: $M \text{ agents} \times K \text{ rounds} + 1 \text{ Judge}$. Three agents over three rounds plus a judge is about $10\times$ the calls of a single agent, and more in practice because transcripts grow each round. Don't use it for routine tasks. Save it for high-consequence architectural, medical, financial, or incident-remediation decisions.
+
+At equal compute, debate often doesn't beat voting. Choi, Zhu & Li, *"Debate or Vote: Which Yields Better Decisions in Multi-Agent Large Language Models?"* (NeurIPS 2025) report that across seven NLP benchmarks, majority voting over independent answers accounts for most of the gains usually credited to debate. So benchmark debate against a cheaper parallel-sample-and-vote baseline (Pattern 2.2) before paying for cross-examination rounds. Debate earns its keep mainly when peers bring *new evidence*: tools, documents, different models.
+
+Then there's the echo chamber. Debaters built on the same model and prompt make correlated errors, converge quickly, and add little beyond voting. Worse, an agent may cave to a confident or majority peer even when that peer is wrong. Counter this with orthogonal system personas (say, *Pro-Rollback Advocate* vs. *Pro-Hotfix Advocate*) or multi-model ensembles, anonymize peer identities in the transcript, and require evidence for any change of position.
+
+### Framework-agnostic pseudocode
 ```python
 class DebatePosition(BaseModel):
     option_id: str                 # constrain to the enumerated options (Literal/enum) so consensus is checkable
@@ -278,14 +298,14 @@ async def multi_agent_debate(
 
 ---
 
-## Chapter 5 Summary Comparison
+## Chapter 5 summary
 
-| Advanced Topology | Communication Mechanism | Latency & Cost | Best Used When... | Mandatory Production Guardrail |
+| Topology | How agents communicate | Latency and cost | Best used when | Required guardrails |
 | :--- | :--- | :--- | :--- | :--- |
-| **4.1 Peer-to-Peer Swarm** | Direct active-pointer transfer (`transfer_to_X`) | **Low** ($1$ agent loop/turn) | Multi-turn interactive user chat switching across domain specialists. | Directed edge cycle detection (`visited_edges`) + `max_handoffs_per_turn` + explicit handoff-context policy. |
-| **4.2 Blackboard** | Read/Write to central versioned Typed State | Medium–High (Async parallel) | Complex diagnostic/research problems with $>5$ decoupled specialists contributing opportunistically. | Trigger signature deduplication (`fired_signatures`) + snapshot reads + conflict-recording patch reducers. |
-| **4.3 Multi-Agent Debate** | Blind Round 1 $\rightarrow$ Cross-Exam $\rightarrow$ Judge | **Highest** ($M \times K + 1$) | High-stakes, ambiguous decisions with no deterministic verifier (M&A, incident remediation, diagnosis)—and only after beating a vote baseline. | Blind Round 1 + orthogonal personas + evidence-required position changes + early consensus termination. |
+| 4.1 Peer-to-peer swarm | Direct active-pointer transfer (`transfer_to_X`) | Low ($1$ agent loop/turn) | A multi-turn interactive chat moves across domain specialists. | Directed-edge cycle detection (`visited_edges`), `max_handoffs_per_turn`, and an explicit handoff-context policy. |
+| 4.2 Blackboard | Reads and writes to a central, versioned, typed state | Medium–High (async parallel) | Complex diagnostic or research problems with $>5$ decoupled specialists contributing opportunistically. | Trigger-signature deduplication (`fired_signatures`), snapshot reads, and conflict-recording patch reducers. |
+| 4.3 Multi-agent debate | Blind Round 1 $\rightarrow$ cross-examination $\rightarrow$ judge | Highest ($M \times K + 1$) | High-stakes, ambiguous decisions with no deterministic verifier (M&A, incident remediation, diagnosis), and only after it beats a vote baseline. | Blind Round 1, orthogonal personas, evidence-required position changes, and early consensus termination. |
 
 ---
 
-[⬅️ Previous: Chapter 4 — Dynamic & Hierarchical Orchestration](./chapter-04-dynamic-and-hierarchical-orchestration.md) | [📚 Book Index](./README.md) | [Next: Chapter 6 — Tool Calling & Action Engineering ➡️](./chapter-06-tool-calling-and-action-engineering.md)
+[← Previous: Chapter 4 — Dynamic & Hierarchical Orchestration](./chapter-04-dynamic-and-hierarchical-orchestration.md) | [Book Index](./README.md) | [Next: Chapter 6 — Tool Calling & Action Engineering →](./chapter-06-tool-calling-and-action-engineering.md)

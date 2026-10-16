@@ -1,29 +1,29 @@
-# Chapter 11: Context Engineering & Long-Term Memory Architectures (Beginner to Advanced)
+# Chapter 11: Context Engineering and Long-Term Memory (Beginner to Advanced)
 
-[⬅️ Previous: Chapter 10 — Agentic Evaluation & Observability](./chapter-10-agentic-evaluation-and-observability.md) | [📚 Book Index](./README.md) | [Next: Chapter 12 — Agentic Security, Identity & Sandboxing ➡️](./chapter-12-agentic-security-identity-and-sandboxing.md)
+[← Previous: Chapter 10 — Agentic Evaluation & Observability](./chapter-10-agentic-evaluation-and-observability.md) | [Book Index](./README.md) | [Next: Chapter 12 — Agentic Security, Identity & Sandboxing →](./chapter-12-agentic-security-identity-and-sandboxing.md)
 
 ---
 
-In early LLM applications, developers practiced **Prompt Engineering**: crafting clever static instructions for a single-turn query. In multi-turn, multi-agent systems, static prompt phrasing is secondary to **Context Engineering**: the discipline of dynamically assembling, ordering, compacting, and evicting the exact tokens inside the LLM's working memory at each step $t$, while persisting durable knowledge across sessions in **Long-Term Memory Architectures**.
+Early LLM applications relied on **prompt engineering**: writing clever static instructions for a single-turn query. Once you have multi-turn, multi-agent systems, the exact wording of a static prompt matters less than **context engineering**, which is the work of deciding which tokens sit in the model's working memory at each step $t$. That means assembling them, ordering them, compacting them and evicting them as the run goes on. Knowledge that has to outlive a session goes into a **long-term memory architecture**.
 
 > [!NOTE]
-> **Where the term comes from:** "Context engineering" became the mainstream name for this discipline in mid-2025 (popularized by Tobi Lütke and Andrej Karpathy, and formalized in Anthropic's *"Effective context engineering for AI agents"*, Sept 2025). LangChain's widely used taxonomy groups the techniques into four moves: **Write** (persist outside the window), **Select** (retrieve the right pieces in), **Compress** (summarize/trim), and **Isolate** (split across sub-agents or sandboxes). This chapter covers all four.
+> "Context engineering" became the mainstream name for this discipline in mid-2025. Tobi Lütke and Andrej Karpathy popularized it, and Anthropic formalized it in *"Effective context engineering for AI agents"* (Sept 2025). LangChain's widely used taxonomy sorts the techniques into four moves: Write (persist outside the window), Select (retrieve the right pieces in), Compress (summarize or trim), and Isolate (split across sub-agents or sandboxes). This chapter covers all four.
 
 ---
 
-## 11.1 Beginner: From Prompt Engineering to Context Engineering
+## 11.1 Beginner: from prompts to context
 
-### Why a "1M–2M Token Context Window" Does Not Mean "Dump Everything In"
-Even when a foundation model supports a 1M–2M token context window, indiscriminately stuffing raw logs, full chat histories, and 50 tool definitions into the window causes three classes of regression:
-1. **"Lost in the Middle" Position Bias (Liu et al., TACL 2024; preprint 2023):** In multi-document QA, models showed a **U-shaped accuracy curve**: they used information at the **very beginning** (primacy) and **very end** (recency) of the prompt far better than information buried in the middle. For GPT-3.5-Turbo, accuracy dropped by **more than 20 points** when the answer document moved from the edges to the middle, sometimes falling *below* its no-documents (closed-book) baseline. Newer long-context models show a flatter curve on simple "needle" tests, but Chroma's *Context Rot* report (July 2025, 18 models) found that accuracy still **degrades non-uniformly as input length grows**, especially with distractors and when the question and the relevant passage share few words.
-2. **Context Poisoning, Distraction & Clash:** A hallucinated "fact" or an outdated hypothesis from Turn 2 can remain in context at Turn 12 and get re-used as if true (*poisoning*); a huge accumulated history can pull the model toward repeating past actions instead of reasoning freshly (*distraction*); and contradictory information gathered over many turns can derail the answer (*clash*).
-3. **Compounding Cost & TTFT Latency:** Every uncached input token adds prefill compute (raising Time-to-First-Token) and is billed again on **every** step of the loop. Because an agent re-sends its growing history each turn, total input tokens across a $K$-step loop grow roughly as $O(K^2)$ unless you cache or compact.
+### A big context window is not a license to dump everything in
+A foundation model may support a 1M–2M token context window, but stuffing it with raw logs, full chat histories and 50 tool definitions still causes regressions. They come in three kinds.
 
-> [!TIP]
-> **Nuance on failed attempts:** "Prune stale context" does not mean "hide every error." Manus's *"Context Engineering for AI Agents"* (2025) recommends **keeping failed actions and error messages in context** so the model sees the evidence and avoids repeating the same mistake. Remove *bulky, stale payloads* (old raw logs); keep *compact records of what failed and why*.
+1. **Position bias ("Lost in the Middle").** Liu et al. (TACL 2024; preprint 2023) found a U-shaped accuracy curve in multi-document QA. Models used information at the very beginning of the prompt (primacy) and the very end (recency) far better than anything buried in the middle. For GPT-3.5-Turbo, accuracy fell by more than 20 points when the answer document moved from the edges to the middle, sometimes dropping *below* its no-documents (closed-book) baseline. Newer long-context models show a flatter curve on simple "needle" tests. Even so, Chroma's *Context Rot* report (July 2025, 18 models) found that accuracy still degrades non-uniformly as input grows, particularly with distractors present or when the question and the relevant passage share few words.
+2. **Poisoning, distraction and clash.** A hallucinated "fact" or an outdated hypothesis from Turn 2 can survive to Turn 12 and be reused as if it were true (*poisoning*). A huge accumulated history can pull the model toward repeating past actions instead of thinking afresh (*distraction*). And contradictory information picked up over many turns can derail the answer (*clash*).
+3. **Compounding cost and TTFT latency.** Every uncached input token adds prefill compute, which raises Time-to-First-Token, and it is billed again on every step of the loop. Because an agent re-sends its growing history each turn, total input tokens across a $K$-step loop grow roughly as $O(K^2)$ unless you cache or compact.
 
-### Canonical Layout of an Engineered Context Window
-To maximize **prompt/KV-cache hit rates** (Chapter 13) and exploit **primacy + recency**, assemble each agent turn's context window in a strict **static-to-dynamic ordering**:
+One nuance: pruning stale context does not mean hiding every error. Manus's *"Context Engineering for AI Agents"* (2025) recommends keeping failed actions and their error messages in context, so the model can see the evidence and avoid repeating the mistake. Drop the bulky, stale payloads (old raw logs) and keep compact records of what failed and why.
+
+### How to lay out the context window
+Order each turn's context from static to dynamic. This maximizes prompt/KV-cache hit rates (Chapter 13) and puts primacy and recency to work for you:
 
 ```mermaid
 flowchart TD
@@ -51,29 +51,30 @@ flowchart TD
 ```
 
 > [!IMPORTANT]
-> **Never inject dynamic values (timestamps, request IDs) at the top of your system prompt.** Provider prompt caches match on an **exact token prefix**: OpenAI caches automatically (prompts ≥1,024 tokens), Anthropic caches up to explicit `cache_control` breakpoints, Gemini offers implicit and explicit context caching, and self-hosted engines such as vLLM and SGLang reuse the KV cache for shared prefixes. Putting `Current Time: 2026-10-16T16:01:43Z` on line 1 changes the prefix on every request and **invalidates the cache for everything after it**. Keep the prefix byte-identical and put dynamic state in the suffix. The same logic applies to tools: **adding or removing tool definitions mid-session also breaks the cache**. Prefer keeping the tool list stable and constraining selection with `tool_choice`/allowed-tools settings or decoding-time masking (the "mask, don't remove" lesson from Manus).
+> **Never inject dynamic values (timestamps, request IDs) at the top of your system prompt.** Provider prompt caches match on an exact token prefix. OpenAI caches automatically (prompts ≥1,024 tokens), Anthropic caches up to explicit `cache_control` breakpoints, Gemini offers implicit and explicit context caching, and self-hosted engines such as vLLM and SGLang reuse the KV cache for shared prefixes. Put `Current Time: 2026-10-16T16:01:43Z` on line 1 and the prefix changes on every request, which invalidates the cache for everything after it. Keep the prefix byte-identical and move dynamic state to the suffix.
 
-> [!NOTE]
-> **Reasoning models change the layout slightly.** With "thinking" models (configurable thinking budgets), you rarely need hand-written chain-of-thought scaffolding in the prompt. Spend those tokens on **clear goals, constraints, and high-signal context** instead. Also check your provider's rules for carrying prior reasoning blocks across tool-use turns, since some APIs require them to be passed back unchanged.
+Tools follow the same logic: adding or removing tool definitions mid-session also breaks the cache. Keep the tool list stable and constrain selection with `tool_choice` or allowed-tools settings, or with decoding-time masking. Manus calls this "mask, don't remove."
+
+Reasoning models shift the layout a little. With "thinking" models (configurable thinking budgets), you rarely need hand-written chain-of-thought scaffolding in the prompt, so spend those tokens on clear goals, constraints and high-signal context. Check your provider's rules for carrying earlier reasoning blocks across tool-use turns too; some APIs require them to be passed back unchanged.
 
 ---
 
-## 11.2 Intermediate: In-Session Context Compaction & Scratchpad Engineering
+## 11.2 Intermediate: compaction and scratchpads within a session
 
-When an agent runs a 15-step debugging or coding loop within a single session, how do you prevent **Context Rot** without losing critical facts discovered in Step 2?
+Say an agent runs a 15-step debugging or coding loop in a single session. How do you keep context rot at bay without losing a key fact it found in Step 2?
 
-### The 4 In-Session Compaction Strategies
+### Four compaction strategies
 
-The savings figures below are **illustrative ranges** for tool-heavy loops. Measure them on your own traces.
+The savings figures below are illustrative ranges for tool-heavy loops. Measure them on your own traces.
 
-| Compaction Strategy | How It Works | Typical Token Savings | Risk / Trade-off |
+| Strategy | How it works | Typical token savings | Risks and trade-offs |
 | :--- | :--- | :--- | :--- |
-| **1. Observation Masking (Stale Tool Pruning)** | Keep the most recent $M=3$ tool observations verbatim; replace older raw tool outputs (`role="tool"`) with a 1-line pointer (`"[Archived 4KB log output -> artifact://step_2; found 42m 503 window]"`). Anthropic's API exposes this as built-in **context editing** (automatic clearing of old tool results). | High on tool-heavy loops (often well over half) | Low: the agent can re-read the artifact URI if it ever needs the raw lines. Masking edits history, so it **breaks the prompt cache from the first edited message onward**. Batch edits rather than editing every turn. |
-| **2. Rolling Hierarchical Summarization (Compaction)** | When context exceeds a watermark (e.g., $24\text{k}$ tokens), compress the oldest ~$50\%$ of turns into a structured `session_summary` block while preserving the last $N$ turns verbatim. | High | Free-text summaries can drop exact IDs or numbers unless guided by a structured extraction schema. |
-| **3. Structured Scratchpad / Todo Pinning (Note-Taking)** | Maintain a live JSON/Markdown checklist (`todo.md` or `ScratchpadState`), updated after each step, re-injected at the bottom of the prompt (recency zone) and/or persisted to a file the agent can re-read. | Indirect: improves focus more than it saves tokens | Requires the agent or orchestrator to update the scratchpad after each step. |
-| **4. Sub-Agent Context Isolation** | Delegate any multi-step search/read task to an isolated worker sub-agent with its own context window. The parent only ever receives the worker's **condensed, structured answer**, never its raw exploration. | Very high **for the parent's window** | Adds a hand-off hop and **raises total spend**: Anthropic reported its multi-agent research system used roughly **15× the tokens of a chat** (vs. ~4× for a single agent). Worth it for parallelizable, breadth-first work; wasteful for tightly sequential tasks. |
+| 1. Observation masking (pruning stale tool output) | Keep the most recent $M=3$ tool observations verbatim; replace older raw tool outputs (`role="tool"`) with a one-line pointer (`"[Archived 4KB log output -> artifact://step_2; found 42m 503 window]"`). Anthropic's API offers this as built-in context editing (automatic clearing of old tool results). | High on tool-heavy loops (often well over half) | Low: the agent can re-read the artifact URI if it ever needs the raw lines. Masking edits history, though, so it breaks the prompt cache from the first edited message onward. Batch the edits instead of editing every turn. |
+| 2. Rolling hierarchical summarization (compaction) | When context passes a watermark (e.g., $24\text{k}$ tokens), compress the oldest ~$50\%$ of turns into a structured `session_summary` block and keep the last $N$ turns verbatim. | High | Free-text summaries can drop exact IDs or numbers unless a structured extraction schema guides them. |
+| 3. Structured scratchpad or todo pinning (note-taking) | Maintain a live JSON/Markdown checklist (`todo.md` or `ScratchpadState`), update it after each step, and re-inject it at the bottom of the prompt (recency zone) and/or persist it to a file the agent can re-read. | Indirect: it improves focus more than it saves tokens | The agent or orchestrator has to update the scratchpad after every step. |
+| 4. Sub-agent context isolation | Hand any multi-step search or read task to an isolated worker sub-agent with its own context window. The parent only receives the worker's condensed, structured answer and never sees its raw exploration. | Very high for the parent's window | Adds a hand-off hop and raises total spend. Anthropic reported that its multi-agent research system used roughly 15× the tokens of a chat (vs. ~4× for a single agent). Worth it for parallelizable, breadth-first work; wasteful for tightly sequential tasks. |
 
-### Production-Grade Framework-Agnostic Pseudocode (Observation Masking + Watermark Compaction)
+### Framework-agnostic pseudocode: observation masking plus watermark compaction
 ```python
 def compact_working_context(
     messages: list[dict],
@@ -129,39 +130,44 @@ def compact_working_context(
 ```
 
 > [!WARNING]
-> **Compaction is lossy and cache-hostile.** Each compaction rewrites history, so the next request pays full (uncached) price for everything after the static prefix. Trigger compaction at a **watermark**, not every turn, and always keep a full-fidelity log outside the context (trace store / artifact store) for debugging and evals (Chapter 10).
+> Compaction is lossy, and it works against the cache. Each compaction rewrites history, so the next request pays the full uncached price for everything after the static prefix. Trigger compaction at a watermark rather than every turn, and always keep a full-fidelity log outside the context (trace store or artifact store) for debugging and evals (Chapter 10).
 
 ---
 
-## 11.3 Advanced: Long-Term Cross-Session Memory Architectures
+## 11.3 Advanced: memory that lasts across sessions
 
-When a user returns three weeks later, **Working Memory** (the session's message history and scratch state, e.g., a LangGraph thread checkpoint or ADK's `session.state`) is gone. How do production agents remember user preferences, architectural topology changes, and lessons from past failures across hundreds of sessions?
+When a user comes back three weeks later, **working memory** is gone. By working memory I mean the session's message history and scratch state, such as a LangGraph thread checkpoint or ADK's `session.state`. So how does a production agent remember user preferences, changes to the architecture it manages, and lessons from past failures over hundreds of sessions?
 
-### Memory Types: A Shared Vocabulary (CoALA, Sumers et al., 2023)
+### Memory types (CoALA, Sumers et al., 2023)
 
-| Memory Type | What It Stores | Example | Typical Store |
+These four categories give everyone a shared vocabulary.
+
+| Type | What it stores | Example | Typical store |
 | :--- | :--- | :--- | :--- |
-| **Working** | The current context window and session scratch state | Last 4 turns, `todo.md` | Prompt + session store |
-| **Semantic** | Facts about the user, world, or domain | *"Checkout-service runs on CockroachDB"* | Profile doc, KV store, knowledge graph |
-| **Episodic** | Records of past experiences/trajectories | *"Last incident, restarting the pod didn't fix the 503s"* | Vector DB of episode summaries |
-| **Procedural** | How to do things: instructions, skills, policies | A `SKILL.md` runbook, an updated system prompt | Files / prompt registry (Chapter 8) |
+| Working | The current context window and session scratch state | Last 4 turns, `todo.md` | Prompt + session store |
+| Semantic | Facts about the user, world, or domain | *"Checkout-service runs on CockroachDB"* | Profile doc, KV store, knowledge graph |
+| Episodic | Records of past experiences/trajectories | *"Last incident, restarting the pod didn't fix the 503s"* | Vector DB of episode summaries |
+| Procedural | How to do things: instructions, skills, policies | A `SKILL.md` runbook, an updated system prompt | Files / prompt registry (Chapter 8) |
 
-Most frameworks ship primitives for this. LangGraph separates **checkpointers** (per-thread short-term state) from a namespaced long-term **`Store`** (`put`/`get`/`search`). Google ADK separates `SessionService` from a `MemoryService` (`InMemoryMemoryService` for prototyping, `VertexAiMemoryBankService` for Google's managed extraction), with `add_session_to_memory()` for ingestion and the `load_memory` / `PreloadMemoryTool` tools for recall. Anthropic's **memory tool** gives Claude a client-side, file-based `/memories` directory it can read and write across sessions. Managed agent runtimes offer comparable services (Amazon Bedrock AgentCore Memory, Azure AI Foundry Agent Service memory, Vertex AI Agent Engine Memory Bank), and open-source memory layers such as **Mem0**, **Letta**, and **Zep/Graphiti** (covered below) can be self-hosted on any stack.
+Most frameworks ship primitives for this. LangGraph separates checkpointers (per-thread short-term state) from a namespaced long-term `Store` (`put`/`get`/`search`). Google ADK separates `SessionService` from a `MemoryService` (`InMemoryMemoryService` for prototyping, `VertexAiMemoryBankService` for Google's managed extraction), with `add_session_to_memory()` for ingestion and the `load_memory` / `PreloadMemoryTool` tools for recall. Anthropic's memory tool gives Claude a client-side, file-based `/memories` directory it can read and write across sessions. Managed agent runtimes have comparable services (Amazon Bedrock AgentCore Memory, Azure AI Foundry Agent Service memory, Vertex AI Agent Engine Memory Bank). Open-source memory layers such as Mem0, Letta and Zep/Graphiti, all covered below, can be self-hosted on any stack.
 
-### Architecture 1: OS-Inspired Virtual Memory (MemGPT / Letta Pattern; Packer et al., 2023)
-Inspired by operating-system paging between fast **RAM** and large **Disk**, **MemGPT** (now the **Letta** framework) divides memory into:
-1. **Core Memory (In-Context "RAM" Blocks):** Small, labeled, editable text blocks always pinned inside the prompt, each with a character limit (e.g., a `human` block for the user profile and a `persona` block for the agent's identity).
-2. **Recall Memory (Indexed Conversation Log):** A searchable database of all historical messages, queried with `conversation_search`.
-3. **Archival Memory (External Vector/Graph "Disk"):** Unbounded long-term storage, queried with `archival_memory_search`.
-* **Self-Directed Memory Management Tools:** The agent is given explicit tools (`core_memory_append`, `core_memory_replace`, `archival_memory_insert`, `archival_memory_search`, `conversation_search`; newer Letta releases add generalized block-editing tools such as `memory_insert` / `memory_replace` / `memory_rethink`) and decides **by itself** when to page facts between archival storage and core memory.
-* **Trade-off:** Self-editing memory is flexible, but every memory operation is an extra LLM tool call, and the agent can write wrong or **attacker-injected** facts into memory (see *memory poisoning* in Chapter 12).
+### Architecture 1: virtual memory, OS-style (MemGPT / Letta; Packer et al., 2023)
+**MemGPT**, now the Letta framework, borrows the way an operating system pages between fast RAM and a large disk. Memory is split into three tiers:
 
-### Architecture 2: Bi-Temporal Knowledge Graph Memory (Solving Contradictory Facts)
-* **Why Naive Vector Memory Fails Over Time:** Suppose in January the user says *"Our checkout-service runs on Postgres 14"*, and in October they say *"We migrated checkout-service from Postgres 14 to CockroachDB today"*. A plain append-only vector store now contains **both** chunks, and semantic search for *"What database does checkout-service use?"* retrieves both contradictory facts.
-* **Option A: LLM-Managed Memory Updates (e.g., Mem0, Chhikara et al., 2025):** For each newly extracted fact, retrieve similar existing memories and let an LLM choose an operation: **`ADD`**, **`UPDATE`**, **`DELETE`**, or **`NOOP`**. This is simple and keeps the store compact, but it overwrites history, so you can no longer answer *"what was true in March?"*
-* **Option B: Bi-Temporal Knowledge Graph (e.g., Zep / Graphiti; Rasmussen et al., 2025):**
-  * Extracts structured edges `(Entity_A, RELATIONSHIP, Entity_B)` annotated with **two timelines**: **valid time** (`t_valid` / `t_invalid`: when the fact was true in the real world) and **transaction time** (`t_created` / `t_expired`: when the system learned it and when the system retired it).
-  * When the October message arrives, an entity-resolution & contradiction-detection pass **invalidates** (rather than deletes) `(checkout-service, USES_DB, Postgres 14)` by setting `t_invalid = 2026-10-16`, and inserts `(checkout-service, USES_DB, CockroachDB)` with `t_valid = 2026-10-16`, `t_invalid = NULL`. Both "what is true now?" and "what was true then?" queries stay answerable.
+1. **Core memory**, the in-context "RAM": small, labeled, editable text blocks that are always pinned in the prompt, each with a character limit. Typical examples are a `human` block for the user profile and a `persona` block for the agent's identity.
+2. **Recall memory**: a searchable, indexed log of every past message, queried with `conversation_search`.
+3. **Archival memory**, the external vector/graph "disk": unbounded long-term storage, queried with `archival_memory_search`.
+
+The agent manages this itself. It gets explicit tools (`core_memory_append`, `core_memory_replace`, `archival_memory_insert`, `archival_memory_search`, `conversation_search`; newer Letta releases add generalized block-editing tools such as `memory_insert` / `memory_replace` / `memory_rethink`) and decides on its own when to move facts between archival storage and core memory.
+
+Self-editing memory is flexible, but you pay for it. Every memory operation is an extra LLM tool call, and the agent can write wrong or attacker-injected facts into memory (see memory poisoning in Chapter 12).
+
+### Architecture 2: bi-temporal knowledge graphs for facts that change
+Naive vector memory breaks down over time. Suppose that in January the user says *"Our checkout-service runs on Postgres 14"*, and in October they say *"We migrated checkout-service from Postgres 14 to CockroachDB today"*. A plain append-only vector store now holds both chunks, and a semantic search for *"What database does checkout-service use?"* pulls back two contradictory facts.
+
+There are two common fixes. The first is to let an LLM manage updates, as Mem0 does (Chhikara et al., 2025). For each newly extracted fact, you retrieve similar existing memories and have an LLM pick one operation: `ADD`, `UPDATE`, `DELETE` or `NOOP`. It's simple and keeps the store compact, but it overwrites history, so you can no longer answer *"what was true in March?"*
+
+The second is a bi-temporal knowledge graph, the approach behind Zep / Graphiti (Rasmussen et al., 2025). It extracts structured edges `(Entity_A, RELATIONSHIP, Entity_B)` and stamps each one with two timelines. Valid time (`t_valid` / `t_invalid`) records when the fact was true in the real world. Transaction time (`t_created` / `t_expired`) records when the system learned it and when the system retired it. When the October message arrives, an entity-resolution and contradiction-detection pass invalidates `(checkout-service, USES_DB, Postgres 14)` instead of deleting it, by setting `t_invalid = 2026-10-16`. It then inserts `(checkout-service, USES_DB, CockroachDB)` with `t_valid = 2026-10-16`, `t_invalid = NULL`. You can still answer both "what is true now?" and "what was true then?"
 
 ```mermaid
 flowchart LR
@@ -169,34 +175,36 @@ flowchart LR
     Extractor --> Resolver["Contradiction & Temporal Resolver"]
 
     subgraph TemporalKG["Bi-Temporal Memory Graph"]
-        OldEdge["checkout-service USES_DB Postgres 14<br/>t_valid: 2025-01-10 | t_invalid: 2026-10-16<br/>❌ Superseded (kept for history)"]
-        NewEdge["checkout-service USES_DB CockroachDB<br/>t_valid: 2026-10-16 | t_invalid: NULL<br/>✅ Active"]
+        OldEdge["checkout-service USES_DB Postgres 14<br/>t_valid: 2025-01-10 | t_invalid: 2026-10-16<br/>Superseded (kept for history)"]
+        NewEdge["checkout-service USES_DB CockroachDB<br/>t_valid: 2026-10-16 | t_invalid: NULL<br/>Active"]
     end
 
     Resolver -- "Invalidates Old Edge" --> OldEdge
     Resolver -- "Inserts Active Edge" --> NewEdge
 ```
 
-### Architecture 3: Hot-Path (Synchronous) vs. Background (Asynchronous) Memory Consolidation
-Extracting entities, checking for contradictions, and updating episodic reflections can take seconds of LLM compute per turn.
-* **Hot-Path Retrieval (Before Turn):** Load core memory and run a fast lookup (e.g., hybrid search over active graph facts, typically tens of milliseconds) and inject the results into the prompt.
-* **Hot-Path Writes (During Turn, Optional):** Let the agent call a memory tool when the user explicitly says *"remember that…"*. This gives immediate consistency but adds latency.
-* **Background Consolidation (After Turn):** Publish the completed turn transcript to an **asynchronous queue** (e.g., Kafka, RabbitMQ/Celery, Amazon SQS, Azure Service Bus, Google Cloud Pub/Sub) whose workers extract new facts, resolve temporal contradictions, and update episodic/semantic memory **off the user's critical path**.
-* **Caveat (eventual consistency):** Background memory may not be ready by the very next turn. That is fine within a session, because the recent verbatim turns are still in working memory. Across sessions, design for a short consolidation lag.
+### Architecture 3: hot-path vs. background consolidation
+Extracting entities, checking for contradictions and updating episodic reflections can cost seconds of LLM compute per turn. You don't want all of that in front of the user, so split the work by when it happens.
+
+Before the turn, on the hot path, load core memory, run a fast lookup (for example hybrid search over active graph facts, which typically takes tens of milliseconds) and inject the results into the prompt. During the turn you can optionally let the agent call a memory tool when the user explicitly says *"remember that…"*. That gives immediate consistency at the cost of some latency.
+
+After the turn, publish the completed transcript to an asynchronous queue (e.g., Kafka, RabbitMQ/Celery, Amazon SQS, Azure Service Bus, Google Cloud Pub/Sub). Workers on that queue extract new facts, resolve temporal contradictions, and update episodic and semantic memory off the user's critical path.
+
+The catch is eventual consistency: background memory may not be ready by the very next turn. Within a session that's fine, because the recent verbatim turns are still in working memory. Across sessions, design for a short consolidation lag.
 
 > [!CAUTION]
-> **Long-term memory is a persistent attack and privacy surface.** An injected instruction that gets "remembered" will re-trigger in every future session (OWASP Agentic **ASI06: Memory & Context Poisoning**, Chapter 12). Scope memory namespaces per user/tenant, record the **provenance** of every stored fact (which session, which source, trusted or untrusted), never auto-promote content from untrusted tool outputs into core/procedural memory, and support user-visible inspection and **deletion** (e.g., GDPR right to erasure).
+> **Long-term memory is a persistent attack and privacy surface.** An injected instruction that gets "remembered" will fire again in every future session (OWASP Agentic ASI06: Memory & Context Poisoning, Chapter 12). Scope memory namespaces per user or tenant. Record the provenance of every stored fact: which session, which source, trusted or untrusted. Never auto-promote content from untrusted tool outputs into core or procedural memory, and let users inspect and delete what's stored (e.g., GDPR right to erasure).
 
 ---
 
-## Chapter 11 Summary Progression
+## Chapter 11 summary
 
-| Level | Context & Memory Capability | Problem Solved | Key Architectural Takeaway |
+| Level | Capability | Problem solved | Key takeaway |
 | :--- | :--- | :--- | :--- |
-| **🟢 Beginner** | **Canonical Context Layout (Primacy/Recency + Static Prefix)** | Reduces "Lost in the Middle"/context-rot recall drops and broken prompt caches. | Keep static prefixes (system prompt, tool list) byte-identical at the top; place active scratchpads and instructions at the bottom. |
-| **🟡 Intermediate** | **Observation Masking, Watermark Compaction, Note-Taking & Sub-Agent Isolation** | Prevents "Context Rot" and $O(K^2)$ token growth during long 15-step loops. | Offload stale tool outputs to artifact URIs, keep recent turns verbatim, compact at a watermark (never splitting tool-call/result pairs). |
-| **🔴 Advanced** | **Memory Types, OS Virtual Memory (MemGPT/Letta), Bi-Temporal Graphs & Async Consolidation** | Persists evolving facts across sessions without contradictions or user-facing latency. | Use bi-temporal edges (`t_valid`/`t_invalid`) to retire outdated facts without losing history, consolidate memory asynchronously, and treat memory as a security boundary. |
+| Beginner | Canonical context layout (primacy/recency + static prefix) | Reduces "Lost in the Middle"/context-rot recall drops and broken prompt caches. | Keep static prefixes (system prompt, tool list) byte-identical at the top; place active scratchpads and instructions at the bottom. |
+| Intermediate | Observation masking, watermark compaction, note-taking and sub-agent isolation | Prevents context rot and $O(K^2)$ token growth during long 15-step loops. | Offload stale tool outputs to artifact URIs, keep recent turns verbatim, compact at a watermark (never splitting tool-call/result pairs). |
+| Advanced | Memory types, OS-style virtual memory (MemGPT/Letta), bi-temporal graphs and async consolidation | Persists evolving facts across sessions without contradictions or user-facing latency. | Use bi-temporal edges (`t_valid`/`t_invalid`) to retire outdated facts without losing history, consolidate memory asynchronously, and treat memory as a security boundary. |
 
 ---
 
-[⬅️ Previous: Chapter 10 — Agentic Evaluation & Observability](./chapter-10-agentic-evaluation-and-observability.md) | [📚 Book Index](./README.md) | [Next: Chapter 12 — Agentic Security, Identity & Sandboxing ➡️](./chapter-12-agentic-security-identity-and-sandboxing.md)
+[← Previous: Chapter 10 — Agentic Evaluation & Observability](./chapter-10-agentic-evaluation-and-observability.md) | [Book Index](./README.md) | [Next: Chapter 12 — Agentic Security, Identity & Sandboxing →](./chapter-12-agentic-security-identity-and-sandboxing.md)

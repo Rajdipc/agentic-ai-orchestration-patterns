@@ -1,24 +1,28 @@
-# Chapter 16: The Agent Quality Flywheel — Continuous Optimization & Model Distillation (Beginner to Advanced)
+# Chapter 16: The Agent Quality Flywheel and Model Distillation
 
-[⬅️ Previous: Chapter 15 — Agent-to-Frontend & Commerce Protocols](./chapter-15-agent-to-frontend-ux-and-commerce-protocols.md) | [📚 Book Index](./README.md) | [Next: Chapter 17 — Production State, HITL & Framework Survey ➡️](./chapter-17-production-state-hitl-and-frameworks.md)
-
----
-
-Launching an agent into production is Day 1. Unlike traditional deterministic software—which behaves identically until someone changes the code—an agentic system operates in a shifting environment of **evolving user queries, changing external APIs, growing knowledge bases, and periodic foundation model upgrades**.
-
-**The Agent Quality Flywheel** is the closed-loop engineering system that continuously converts production telemetry into higher accuracy, lower latency, and—once distillation pays off—substantially lower inference cost (often an order of magnitude for narrow, high-volume tasks) via **Automated Failure Mining**, **Programmatic Prompt/Skill Evolution**, and **Trajectory Distillation**.
+[← Previous: Chapter 15 — Agent-to-Frontend & Commerce Protocols](./chapter-15-agent-to-frontend-ux-and-commerce-protocols.md) | [Book Index](./README.md) | [Next: Chapter 17 — Production State, HITL & Framework Survey →](./chapter-17-production-state-hitl-and-frameworks.md)
 
 ---
 
-## 16.1 Beginner: Why Static Agents Degrade & The 5-Stage Quality Flywheel
+Launching an agent into production is Day 1. Traditional deterministic software behaves the same way until someone changes the code. An agent has no such guarantee: user queries evolve, external APIs change, knowledge bases grow, and the foundation model underneath gets upgraded every so often.
 
-### Three Sources of Production Agent Drift
-1. **Input Distribution Shift:** Real users phrase compound queries, typos, and edge cases in ways your initial 50-case golden dataset never anticipated.
-2. **Tool & Environment Drift:** Upstream microservices add new status codes, database schemas gain new columns, or runbook documents change.
-3. **Model Version & Prompt Drift:** A minor tweak to a system prompt to fix Bug A can silently degrade routing accuracy on Workflow B (e.g., by double-digit percentages). Likewise, a model upgrade—or a provider silently re-pointing a floating alias like `*-latest`—can change tool-selection behavior overnight. **Pin dated model versions in production, and treat every model or prompt change as a release that must pass the full eval suite.** Prompts tuned for one model often do not transfer cleanly to the next.
+The **Agent Quality Flywheel** is the closed-loop engineering system that turns production telemetry into higher accuracy and lower latency. Once distillation pays off, it also brings much lower inference cost, often an order of magnitude for narrow, high-volume tasks. It runs on three techniques: automated failure mining, programmatic prompt and skill evolution, and trajectory distillation.
 
-### The 5-Stage Agent Quality Flywheel
-Instead of ad-hoc manual prompt tweaking ("vibe-driven development"), production teams run a disciplined **5-Stage Closed Loop**:
+---
+
+## 16.1 Why static agents degrade, and the 5-stage flywheel (Beginner)
+
+### Three sources of drift
+
+The first is input distribution shift. Real users write compound queries, typos and edge cases that your initial 50-case golden dataset never anticipated.
+
+The second is tool and environment drift. Upstream microservices add new status codes, database schemas gain new columns, runbook documents change.
+
+The third is model version and prompt drift. A small system-prompt tweak to fix Bug A can quietly degrade routing accuracy on Workflow B, sometimes by double-digit percentages. A model upgrade can change tool-selection behavior overnight, and so can a provider silently re-pointing a floating alias like `*-latest`. Prompts tuned for one model often don't transfer cleanly to the next. **Pin dated model versions in production, and treat every model or prompt change as a release that must pass the full eval suite.**
+
+### The 5-stage flywheel
+
+The alternative to ad-hoc manual prompt tweaking ("vibe-driven development") is a disciplined closed loop with five stages:
 
 ```mermaid
 flowchart LR
@@ -29,38 +33,47 @@ flowchart LR
     S5 -- "Continuous Telemetry" --> S1
 ```
 
-### Implicit vs. Explicit Production Quality Signals
-Don't wait for users to click a "Thumbs Down" button—explicit feedback is sparse (typically only a small fraction of sessions) and skewed toward extreme experiences. Mine **implicit behavioral & systems signals** from OpenTelemetry traces (in whichever backend you export to: Langfuse, Arize Phoenix, LangSmith, Datadog, or your cloud's native tracing service):
-* **User Rephrase / Retry within 30s:** The user immediately re-asked the same question because the first answer missed the mark.
-* **HITL Edit Distance:** A human reviewer had to heavily edit the agent's drafted email or tool arguments before approving.
-* **Loop & Step Anomalies:** Any trace where `step_count > P95` or where `ToolExecutionError` occurred $>2$ times.
+### Implicit and explicit quality signals
 
-Implicit signals are noisy proxies (a rephrase can also mean the user simply changed their mind), so treat them as a **triage queue for human or LLM-judge review**, not as ground-truth labels.
+Don't wait for users to click a thumbs-down button. Explicit feedback is sparse (typically only a small fraction of sessions) and skews toward extreme experiences. You'll learn more from implicit behavioral and system signals in your OpenTelemetry traces, in whichever backend you export to: Langfuse, Arize Phoenix, LangSmith, Datadog, or your cloud's native tracing service. The useful ones:
+* A rephrase or retry within 30s. The user immediately re-asked the same question because the first answer missed the mark.
+* HITL edit distance. A human reviewer had to heavily edit the agent's drafted email or tool arguments before approving.
+* Loop and step anomalies. Any trace where `step_count > P95`, or where `ToolExecutionError` occurred $>2$ times.
+
+These are noisy proxies; a rephrase can also mean the user simply changed their mind. Treat them as a triage queue for human or LLM-judge review, and don't use them as ground-truth labels.
 
 ---
 
-## 16.2 Intermediate: Step-Level Fault Attribution & Programmatic Prompt/Skill Evolution
+## 16.2 Fault attribution and automated prompt evolution (Intermediate)
 
-### 1. Step-Level Fault Attribution (Blame Assignment in Multi-Agent Graphs)
+### 1. Step-level fault attribution in multi-agent graphs
+
 When a 4-agent pipeline (`Router -> Retriever -> Analyst -> Writer`) produces a wrong final answer, which component do you fix?
-* **The Attribution Waterfall:** Inspect the intermediate state checkpoints along the trace in forward order and blame the **earliest** failing step (later failures are often just downstream consequences):
-  1. **Routing Fault:** Did the Router classify the intent incorrectly?
-  2. **Retrieval / Context Fault:** Did the Retriever miss the relevant chunks (e.g., `Recall@K = 0` against labeled evidence)?
-  3. **Tool Execution / Schema Fault:** Did a tool call fail validation or return misleading error text?
-  4. **Reasoning / Synthesis Fault:** All required facts were present in `Analyst`'s context window, but the LLM hallucinated or dropped a constraint during generation.
 
-### 2. Programmatic Prompt & Skill Optimization (DSPy / GEPA / TextGrad / Meta-Prompting)
-Once you have a [4-Tier Golden Eval Suite (Chapter 10)](./chapter-10-agentic-evaluation-and-observability.md) and fault attribution, you can replace manual prompt guessing with **automated optimization loops**. All of them share one non-negotiable requirement: a **trustworthy metric** and a **held-out validation set**—an optimizer will happily overfit to (or exploit) a weak metric.
+Use the **Attribution Waterfall**. Inspect the intermediate state checkpoints along the trace in forward order and blame the earliest failing step, because later failures are often just downstream consequences. Check in this order:
+1. Routing fault. Did the Router classify the intent incorrectly?
+2. Retrieval or context fault. Did the Retriever miss the relevant chunks (e.g., `Recall@K = 0` against labeled evidence)?
+3. Tool execution or schema fault. Did a tool call fail validation or return misleading error text?
+4. Reasoning or synthesis fault. All the required facts were in `Analyst`'s context window, but the LLM hallucinated or dropped a constraint during generation.
 
-* **Pattern A — Automated Few-Shot Bootstrapping (DSPy `BootstrapFewShot` / `MIPROv2` style):**
-  1. Run your agent across 200 training scenarios.
-  2. Filter for traces that achieved $100\%$ Trajectory + Outcome pass with the lowest step count.
-  3. Select the top $K=3\text{–}5$ diverse passing trajectories and inject them as **few-shot exemplars** into the agent's prompt or the `SKILL.md` `examples/` folder, keeping the subset that maximizes the validation score. (`MIPROv2` goes further and jointly searches over instructions *and* demonstrations.)
-  4. Caveat: with modern reasoning models, long few-shot blocks sometimes help less than clear instructions—or even hurt—so always let the validation score decide.
-* **Pattern B — Textual Gradients & Reflective Evolution (`TextGrad`, `GEPA`, Critic-Driven Skill Evolution):**
-  1. Collect a batch of failing evaluation traces where fault attribution points to an instruction gap in `SKILL.md` or a tool docstring.
-  2. Pass `(Current SKILL.md, Failing Traces, Expected Rubric)` to a **Meta-Optimizer LLM**, asking it to diagnose the instruction ambiguity in natural language and propose a minimal diff patch. This is the core idea behind **TextGrad** (Yuksekgonul et al.; preprint 2024, published in *Nature* 2025), which "backpropagates" LLM-written feedback through a compound system, and **GEPA** (Agrawal et al., 2025, "Reflective Prompt Evolution Can Outperform Reinforcement Learning"; available as `dspy.GEPA`), which reflects on full trajectories and keeps a **Pareto frontier** of candidate prompts rather than a single best one. The GEPA authors report beating GRPO-style RL fine-tuning on their benchmarks with far fewer rollouts—a strong reason to try prompt evolution *before* reaching for fine-tuning.
-  3. **The Golden Regression Gate:** Accept the proposed `SKILL.md` patch *if and only if* it resolves the targeted failing cases **and** causes no regressions on the existing golden dataset (no previously passing case now fails)—and confirm the gain on a held-out set the optimizer never saw.
+### 2. Programmatic prompt and skill optimization (DSPy, GEPA, TextGrad, meta-prompting)
+
+Once you have a [4-Tier Golden Eval Suite (Chapter 10)](./chapter-10-agentic-evaluation-and-observability.md) and fault attribution in place, you can replace manual prompt guessing with automated optimization loops. They all share one non-negotiable requirement: a trustworthy metric and a held-out validation set. An optimizer will happily overfit to a weak metric, or exploit it.
+
+**Pattern A: automated few-shot bootstrapping** (in the style of DSPy `BootstrapFewShot` / `MIPROv2`).
+1. Run your agent across 200 training scenarios.
+2. Filter for traces that achieved a $100\%$ Trajectory + Outcome pass with the lowest step count.
+3. Pick the top $K=3\text{–}5$ diverse passing trajectories and inject them as few-shot exemplars into the agent's prompt or the `SKILL.md` `examples/` folder, keeping the subset that maximizes the validation score. `MIPROv2` goes further and searches jointly over instructions *and* demonstrations.
+4. One caveat: with modern reasoning models, long few-shot blocks sometimes help less than clear instructions, and can even hurt. Let the validation score decide.
+
+**Pattern B: textual gradients and reflective evolution** (`TextGrad`, `GEPA`, critic-driven skill evolution).
+1. Collect a batch of failing evaluation traces where fault attribution points to an instruction gap in `SKILL.md` or a tool docstring.
+2. Pass `(Current SKILL.md, Failing Traces, Expected Rubric)` to a meta-optimizer LLM. Ask it to diagnose the instruction ambiguity in natural language and propose a minimal diff patch.
+
+   This is the core idea behind TextGrad (Yuksekgonul et al.; preprint 2024, published in *Nature* 2025), which "backpropagates" LLM-written feedback through a compound system. GEPA (Agrawal et al., 2025, "Reflective Prompt Evolution Can Outperform Reinforcement Learning"; available as `dspy.GEPA`) builds on it too: it reflects on full trajectories and keeps a Pareto frontier of candidate prompts instead of a single best one. The GEPA authors report beating GRPO-style RL fine-tuning on their benchmarks with far fewer rollouts. That's a good reason to try prompt evolution *before* you reach for fine-tuning.
+3. Run the regression gate. Accept the proposed `SKILL.md` patch if and only if it resolves the targeted failing cases and causes no regressions on the existing golden dataset (no previously passing case now fails). Then confirm the gain on a held-out set the optimizer never saw.
+
+The function below wires Pattern B and the gate together:
 
 ```python
 import asyncio
@@ -100,12 +113,12 @@ async def evolve_skill_from_failures(
 
 ---
 
-## 16.3 Advanced: Trajectory Distillation & Model Down-Tiering (Frontier $\rightarrow$ Small/Fast Model)
+## 16.3 Trajectory distillation and model down-tiering (Advanced)
 
-The ultimate ROI of the Agent Quality Flywheel is **Model Distillation (Down-Tiering)**: starting with a heavyweight **Frontier Reasoning Model** (e.g., a GPT-, Claude Opus-, or Gemini Pro-class model) on Day 1 to achieve high accuracy rapidly, and then distilling its verified behavior into a **much faster, much cheaper Student Model** (e.g., a small/fast tier such as GPT mini-, Claude Haiku-, or Gemini Flash-class models, or a fine-tuned open-weight model such as Llama, Qwen, Mistral, or Gemma) once production traffic scales. Gains of roughly an order of magnitude in cost are common for narrow, high-volume tasks, but measure them on *your* workload.
+The biggest payoff of the flywheel is **model distillation**, also called down-tiering. On Day 1 you start with a heavyweight frontier reasoning model (a GPT-, Claude Opus- or Gemini Pro-class model) to reach high accuracy quickly. Once production traffic scales, you distill its verified behavior into a much faster, much cheaper student model. That might be a small, fast tier such as GPT mini-, Claude Haiku- or Gemini Flash-class models, or a fine-tuned open-weight model such as Llama, Qwen, Mistral or Gemma. Cost reductions of roughly an order of magnitude are common for narrow, high-volume tasks, but measure them on *your* workload.
 
 > [!WARNING]
-> **Check the terms before you distill.** Many model providers' terms of service restrict using their outputs to train models that compete with them. Distilling within the same provider's family (via their managed tuning service, e.g., OpenAI fine-tuning, Amazon Bedrock model customization, Azure AI Foundry fine-tuning, or Vertex AI tuning) or from a teacher whose license permits it is the safe path. Also note that many reasoning-model APIs return only **summarized or encrypted reasoning**, not the raw chain-of-thought—so plan to distill the *actions* (tool calls, arguments, final answers) plus any visible rationale, not hidden thoughts.
+> **Check the terms before you distill.** Many model providers' terms of service restrict using their outputs to train models that compete with them. The safe path is to distill within the same provider's family through their managed tuning service (e.g., OpenAI fine-tuning, Amazon Bedrock model customization, Azure AI Foundry fine-tuning, or Vertex AI tuning), or from a teacher whose license permits it. Also, many reasoning-model APIs return only summarized or encrypted reasoning, not the raw chain-of-thought. Plan to distill the *actions* (tool calls, arguments, final answers) plus any visible rationale, not hidden thoughts.
 
 ```mermaid
 flowchart TD
@@ -115,37 +128,50 @@ flowchart TD
     Train --> Shadow["5. Shadow & Canary Evaluation<br/>Verify Student pass^3 >= Teacher pass^3<br/>at a Fraction of the Cost & Latency"]
 ```
 
-### The Three Distillation Techniques for Agents
-1. **Rejection-Sampled Supervised Fine-Tuning (Trajectory SFT):**
-   * Filter Teacher production logs for trajectories that passed all deterministic code gates, trajectory checks, and outcome rubrics with minimal steps.
-   * Fine-tune the smaller Student model on `(System + Context + Turn_t) -> (Teacher visible rationale + ToolCall_t)` pairs. This teaches a small model to select tools and arguments like the Frontier model *inside your specific domain*—it does not make it a general-purpose frontier model.
-   * Caveat: SFT on teacher traces is **off-policy**—the student never sees its own mistakes. **On-policy distillation** (the student generates trajectories and the teacher or a verifier scores/corrects them; e.g., GKD, Agarwal et al., ICLR 2024) often closes the remaining gap.
-2. **Direct Preference Optimization (DPO; Rafailov et al., 2023) on Branched Trajectories:**
-   * Whenever an agent fails on Attempt 1 (e.g., emits an invalid SQL query or wrong tool call) and self-heals on Attempt 2 (via [Chapter 2](./chapter-02-single-agent-loops.md) Error-as-Observation or Reflexion), you get a candidate **Preference Pair**:
-     * $\mathbf{y_{\text{win}}}$ (Chosen): Attempt 2's valid tool call.
-     * $\mathbf{y_{\text{lose}}}$ (Rejected): Attempt 1's failed tool call.
-   * Nuance: DPO pairs must share the **same prompt/context**. Attempt 2 was generated *after* seeing the error message, so build the pair on the pre-error context (the state before Attempt 1) and verify that Attempt 2's call is actually correct when replayed from that state.
-   * Training with DPO teaches the Student model to avoid the mistakes it previously had to self-correct, substantially **reducing** (not eliminating) retry turns—keep error-as-observation in the runtime as a safety net.
-3. **Reinforcement Fine-Tuning (RFT) with Deterministic Verifiers:**
-   * For domains with executable verifiers (code compilers and tests, SQL sandboxes, math/schema graders), train the model with RL (e.g., PPO- or GRPO-style algorithms, or managed RFT offerings) against the deterministic grader reward plus a step-efficiency penalty.
-   * Guard against **reward hacking**: the policy will exploit any loophole in the grader (e.g., special-casing tests), so audit high-reward trajectories and keep a held-out eval.
+### Three distillation techniques for agents
 
-### Shadow & Canary Deployment for Distilled Agents
-Never swap a Teacher model for a distilled Student model in one big-bang release:
-* **Stage 1 — Dark Shadow Mode:** Mirror a sample (e.g., $10\%$) of live traffic to the Student model asynchronously, discard its output, and compare its tool selections and arguments against the live Teacher. Side-effecting tool calls must be **stubbed or dry-run** in shadow mode—never let the shadow agent actually send emails or mutate state.
-* **Stage 2 — Canary:** Route a small percentage of real traffic to the Student with automated rollback on eval-metric or business-KPI regressions.
-* **Stage 3 — Confidence-Gated Hybrid Cascade:** Let the fast Student model handle traffic first; escalate to the Frontier Teacher for that turn when a **verifiable signal** fires—schema-validation failure, a `ToolExecutionError` on Turn 1, a low verifier/judge score, or low token log-probabilities on the routing decision. Avoid relying on the model's *self-reported* confidence (e.g., "confidence: 0.80"); verbalized confidence is poorly calibrated.
+#### 1. Rejection-sampled supervised fine-tuning (trajectory SFT)
+
+Filter the teacher's production logs for trajectories that passed all deterministic code gates, trajectory checks and outcome rubrics with minimal steps. Then fine-tune the smaller student on `(System + Context + Turn_t) -> (Teacher visible rationale + ToolCall_t)` pairs. This teaches a small model to select tools and arguments the way the frontier model does *inside your specific domain*. It won't turn it into a general-purpose frontier model.
+
+The catch is that SFT on teacher traces is off-policy: the student never sees its own mistakes. **On-policy distillation**, where the student generates trajectories and the teacher or a verifier scores or corrects them (e.g., GKD, Agarwal et al., ICLR 2024), often closes the remaining gap.
+
+#### 2. Direct Preference Optimization on branched trajectories
+
+Sometimes an agent fails on attempt 1 (it emits an invalid SQL query or a wrong tool call, say) and self-heals on attempt 2 through [Chapter 2](./chapter-02-single-agent-loops.md) Error-as-Observation or Reflexion. Each time that happens, you get a candidate preference pair for Direct Preference Optimization (DPO; Rafailov et al., 2023):
+* $\mathbf{y_{\text{win}}}$ (chosen): attempt 2's valid tool call.
+* $\mathbf{y_{\text{lose}}}$ (rejected): attempt 1's failed tool call.
+
+There's a subtlety here. DPO pairs must share the same prompt and context, and attempt 2 was generated *after* the model saw the error message. So build the pair on the pre-error context (the state before attempt 1), and verify that attempt 2's call is actually correct when replayed from that state.
+
+Training with DPO teaches the student to avoid the mistakes it previously had to self-correct. That cuts retry turns substantially, though it won't eliminate them, so keep error-as-observation in the runtime as a safety net.
+
+#### 3. Reinforcement fine-tuning (RFT) with deterministic verifiers
+
+For domains with executable verifiers (code compilers and tests, SQL sandboxes, math or schema graders), train the model with RL against the deterministic grader's reward plus a step-efficiency penalty. PPO- or GRPO-style algorithms work, as do managed RFT offerings.
+
+Watch for **reward hacking**. The policy will exploit any loophole in the grader (special-casing tests, for example), so audit high-reward trajectories and keep a held-out eval.
+
+### Shadow and canary deployment for distilled agents
+
+Never swap a teacher model for a distilled student in one big-bang release. Roll it out in stages.
+
+Stage 1 is dark shadow mode. Mirror a sample of live traffic (e.g., $10\%$) to the student asynchronously, discard its output, and compare its tool selections and arguments against the live teacher. Side-effecting tool calls must be stubbed or dry-run in shadow mode. The shadow agent should never actually send emails or mutate state.
+
+Stage 2 is a canary: route a small percentage of real traffic to the student, with automated rollback on eval-metric or business-KPI regressions.
+
+Stage 3 is a confidence-gated hybrid cascade. The fast student handles traffic first and escalates that turn to the frontier teacher when a verifiable signal fires. Good signals are a schema-validation failure, a `ToolExecutionError` on Turn 1, a low verifier or judge score, or low token log-probabilities on the routing decision. Don't rely on the model's *self-reported* confidence (e.g., "confidence: 0.80"), because verbalized confidence is poorly calibrated.
 
 ---
 
-## Chapter 16 Summary Progression
+## Chapter 16 summary
 
-| Level | Flywheel Capability | Engineering Mechanism | Key Architectural Takeaway |
+| Level | Capability | Mechanism | Takeaway |
 | :--- | :--- | :--- | :--- |
-| **🟢 Beginner** | **5-Stage Closed-Loop Flywheel & Implicit Signal Mining** | OTel trace capture $\rightarrow$ PII redaction $\rightarrow$ CI eval case | Mine implicit failure signals (user retries, high step counts, HITL edits) into golden test cases continuously; pin model versions and gate every model/prompt change on evals. |
-| **🟡 Intermediate** | **Step-Level Fault Attribution & Automated Prompt/Skill Evolution** | Waterfall blame assignment + `BootstrapFewShot` / `MIPROv2` / `GEPA` / `TextGrad` | Attribute failures to the earliest failing node (Router vs. RAG vs. Tool vs. Prompt) and gate automated prompt/skill diffs against your regression suite plus a held-out set. |
-| **🔴 Advanced** | **Trajectory Distillation (SFT/DPO/RFT) & Shadow Cascades** | Rejection sampling Teacher logs $\rightarrow$ Fine-tuning a small/fast-tier Student | Use verified traces (SFT), same-context self-heal pairs (DPO), and verifier rewards (RFT) to distill Frontier accuracy into a much cheaper/faster model—within your provider's terms—and roll out via shadow, canary, and verifier-gated cascades. |
+| Beginner | 5-stage closed-loop flywheel and implicit signal mining | OTel trace capture $\rightarrow$ PII redaction $\rightarrow$ CI eval case | Mine implicit failure signals (user retries, high step counts, HITL edits) into golden test cases continuously; pin model versions and gate every model/prompt change on evals. |
+| Intermediate | Step-level fault attribution and automated prompt/skill evolution | Waterfall blame assignment + `BootstrapFewShot` / `MIPROv2` / `GEPA` / `TextGrad` | Attribute failures to the earliest failing node (Router vs. RAG vs. Tool vs. Prompt) and gate automated prompt/skill diffs against your regression suite plus a held-out set. |
+| Advanced | Trajectory distillation (SFT/DPO/RFT) and shadow cascades | Rejection sampling teacher logs $\rightarrow$ fine-tuning a small/fast-tier student | Use verified traces (SFT), same-context self-heal pairs (DPO), and verifier rewards (RFT) to distill frontier accuracy into a much cheaper, faster model (within your provider's terms), then roll out via shadow, canary, and verifier-gated cascades. |
 
 ---
 
-[⬅️ Previous: Chapter 15 — Agent-to-Frontend & Commerce Protocols](./chapter-15-agent-to-frontend-ux-and-commerce-protocols.md) | [📚 Book Index](./README.md) | [Next: Chapter 17 — Production State, HITL & Framework Survey ➡️](./chapter-17-production-state-hitl-and-frameworks.md)
+[← Previous: Chapter 15 — Agent-to-Frontend & Commerce Protocols](./chapter-15-agent-to-frontend-ux-and-commerce-protocols.md) | [Book Index](./README.md) | [Next: Chapter 17 — Production State, HITL & Framework Survey →](./chapter-17-production-state-hitl-and-frameworks.md)

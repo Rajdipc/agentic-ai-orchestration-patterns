@@ -1,24 +1,24 @@
-# Chapter 4 (Intermediate — Part 2): Dynamic & Hierarchical Multi-Agent Orchestration
+# Chapter 4 (Intermediate, Part 2): Dynamic and Hierarchical Multi-Agent Orchestration
 
-[⬅️ Previous: Chapter 3 — Deterministic Workflows](./chapter-03-deterministic-multi-agent-workflows.md) | [📚 Book Index](./README.md) | [Next: Chapter 5 — Decentralized & Emergent Topologies ➡️](./chapter-05-decentralized-and-emergent-topologies.md)
-
----
-
-In Chapter 3, application code knew the exact graph structure at compile time. But what if the number of parallel sub-tasks, the sequence of domain specialists, or the number of revision cycles **can't be known until runtime**? Then we cross into **Dynamic Multi-Agent Orchestration**, where an LLM acts as the runtime orchestrator, critic, or supervisor.
-
-Patterns 3.1 and 3.2 are the two remaining workflows from Anthropic's *"Building Effective Agents"* (Dec 2024): **orchestrator–workers** and **evaluator–optimizer**. Pattern 3.3 generalizes orchestrator–workers into a multi-turn, multi-domain **supervisor**.
+[← Previous: Chapter 3 — Deterministic Workflows](./chapter-03-deterministic-multi-agent-workflows.md) | [Book Index](./README.md) | [Next: Chapter 5 — Decentralized & Emergent Topologies →](./chapter-05-decentralized-and-emergent-topologies.md)
 
 ---
 
-## Pattern 3.1: Orchestrator–Workers (Dynamic Map-Reduce)
-*An Orchestrator LLM decomposes a problem at runtime into $N$ independent sub-tasks and spawns isolated Worker Agents in parallel.*
+In Chapter 3, application code knew the exact graph at compile time. Sometimes you can't know that in advance: the number of parallel sub-tasks, the order of domain specialists, or the number of revision cycles only becomes clear at runtime. That's where **dynamic multi-agent orchestration** comes in, with an LLM acting as the runtime orchestrator, critic, or supervisor.
+
+Patterns 3.1 and 3.2 are the two remaining workflows from Anthropic's *"Building Effective Agents"* (Dec 2024): orchestrator–workers and evaluator–optimizer. Pattern 3.3 extends orchestrator–workers into a multi-turn, multi-domain supervisor.
+
+---
+
+## Pattern 3.1: Orchestrator–workers (dynamic map-reduce)
+*An orchestrator LLM breaks a problem into $N$ independent sub-tasks at runtime and spawns isolated worker agents in parallel.*
 
 ### Architecture
-Orchestrator–Workers looks like Parallelization (Pattern 2.2), but differs in one fundamental way: **the parallel branches are not hardcoded at compile time**. The **Orchestrator LLM**:
+Orchestrator–workers looks like parallelization (Pattern 2.2), with one fundamental difference: the parallel branches aren't hardcoded at compile time. The orchestrator LLM:
 1. Inspects the problem, often after a preliminary discovery tool call.
 2. Decides at runtime whether there are 2, 7, or 20 sub-tasks.
-3. Dispatches a **Worker Agent** per sub-task, under a bounded concurrency semaphore.
-4. Aggregates the workers' structured outputs in a **Reducer / Synthesizer**.
+3. Dispatches a worker agent per sub-task, under a bounded concurrency semaphore.
+4. Aggregates the workers' structured outputs in a reducer or synthesizer.
 
 ```mermaid
 flowchart TD
@@ -32,15 +32,16 @@ flowchart TD
     Reducer --> Output["Unified Aggregated Deliverable"]
 ```
 
-### Why This Architecture?
-* **Why use it over Static Parallelization (Pattern 2.2):** In static parallelization, you hardcode `asyncio.gather(log_agent, deploy_agent, billing_agent)`. Now suppose a user says *"Audit every microservice that depends on `auth-service`"* or *"Refactor every file in our repository that imports `legacy_db`"*. You don't know which services or files exist, or how many, until the Orchestrator discovers them at runtime.
-* **Defeats the $O(K^2)$ Context Tax:** Suppose one agent refactors 15 files sequentially in a single context window. By File #12, that window holds ~80,000 tokens of prior diffs and test logs. Spawning 15 isolated **Worker Agents** gives each file a clean context of just a few thousand tokens.
-* **Delegation quality is the bottleneck:** Vague sub-task strings ("research X") produce duplicated or missed work. Have the orchestrator emit, for each worker, an **objective**, a **scope boundary** (what *not* to touch), an **expected output format**, and **tool/source guidance**. Anthropic reports these as key lessons from its research system.
-* **Trade-offs & Failure Modes:**
-  * **Runaway Fan-Out Bomb:** Without a hard `max_length` schema limit, an `asyncio.Semaphore` concurrency cap, and an overall token budget, an Orchestrator might emit 200 sub-tasks and immediately exhaust your API rate limit (HTTP 429) and budget.
-  * **Conflicting Implicit Decisions (write-heavy tasks):** Workers that *write* in parallel, such as editing different files of the same refactor, each make unshared choices about naming, interfaces, and error handling. Those choices often clash at merge time. See the reality check below.
+### Why it works
+With static parallelization you hardcode `asyncio.gather(log_agent, deploy_agent, billing_agent)`. That breaks down when a user says *"Audit every microservice that depends on `auth-service`"* or *"Refactor every file in our repository that imports `legacy_db`"*. You don't know which services or files exist, or how many, until the orchestrator discovers them at runtime.
 
-### Production-Grade Framework-Agnostic Pseudocode
+It also avoids the $O(K^2)$ context tax. If one agent refactors 15 files sequentially in a single context window, by file #12 that window holds ~80,000 tokens of prior diffs and test logs. Fifteen isolated workers each get a clean context of a few thousand tokens.
+
+In practice, delegation quality is the bottleneck. Vague sub-task strings like "research X" produce duplicated or missed work. Have the orchestrator give each worker an objective, a scope boundary (what not to touch), an expected output format, and guidance on tools and sources. Anthropic reports these as key lessons from its research system.
+
+Two failure modes need guarding against. The first is a runaway fan-out: without a hard `max_length` schema limit, an `asyncio.Semaphore` concurrency cap, and an overall token budget, an orchestrator might emit 200 sub-tasks and immediately exhaust your API rate limit (HTTP 429) and your budget. The second shows up on write-heavy tasks. Workers that write in parallel, say editing different files in the same refactor, each make their own unshared choices about naming, interfaces, and error handling, and those choices often clash at merge time. The reality check below covers this.
+
+### Framework-agnostic pseudocode
 ```python
 class Subtask(BaseModel):
     objective: str
@@ -84,44 +85,41 @@ async def orchestrator_workers(user_request: str, max_concurrent_workers: int = 
     )
 ```
 
-> [!TIP]
-> **Framework equivalents:** In **LangGraph**, a conditional edge returns a list of `Send("worker", payload)` objects (the map step). A state field with a reducer such as `Annotated[list, operator.add]` collects the results (the reduce step). In **agents-as-tools** SDKs, such as OpenAI Agents SDK's `agent.as_tool(...)`, Claude Agent SDK subagents, or Google ADK's `AgentTool`, the orchestrator model issues one tool call per sub-task, possibly in parallel.
+In LangGraph, the map step is a conditional edge that returns a list of `Send("worker", payload)` objects, and a state field with a reducer such as `Annotated[list, operator.add]` collects the results (the reduce step). In agents-as-tools SDKs, such as OpenAI Agents SDK's `agent.as_tool(...)`, Claude Agent SDK subagents, or Google ADK's `AgentTool`, the orchestrator model issues one tool call per sub-task, possibly in parallel.
 
-### Runtime Execution Trace (Running Scenario Evolution)
-* **Evolved Scenario:** *"All 4 of my regional clusters (`us-east`, `us-west`, `eu-central`, `ap-south`) reported intermittent 503s over the last 24 hours. Find the root cause in each region and compute my total SLA credit."*
-1. **Orchestrator (Map):** Emits 4 dynamic regional investigation tasks, e.g., `Subtask(objective="Find root cause and downtime of 503s", scope="us-east only", output_format="RCAReport JSON")`.
-2. **Workers (Execute):** 4 isolated Worker Agents run concurrently. Each queries logs and deploys *only* for its assigned region, so logs never mix across regions.
-3. **Synthesizer (Reduce):** Receives 4 concise regional reports:
+### Trace through the running scenario
+The scenario grows: *"All 4 of my regional clusters (`us-east`, `us-west`, `eu-central`, `ap-south`) reported intermittent 503s over the last 24 hours. Find the root cause in each region and compute my total SLA credit."*
+1. Orchestrator (map): emits 4 regional investigation tasks, e.g., `Subtask(objective="Find root cause and downtime of 503s", scope="us-east only", output_format="RCAReport JSON")`.
+2. Workers (execute): 4 isolated worker agents run concurrently. Each queries logs and deploys only for its own region, so logs never mix across regions.
+3. Synthesizer (reduce): receives 4 short regional reports:
    * `us-east`: 42m DB pool issue.
    * `eu-central`: 12m BGP flap.
    * `us-west` & `ap-south`: 0m of server-side downtime; the 503s came from a client-side firewall block.
 
-   It then hands the per-region numbers to a **deterministic function** that computes the SLA credits. Don't ask an LLM to do contract arithmetic.
+   It then passes the per-region numbers to a deterministic function that computes the SLA credits. Don't ask an LLM to do contract arithmetic.
 
-### Production Reality Check (Advanced): When Orchestrator–Workers Pays Off
-* **The evidence for breadth-first, read-heavy work:** In *"How we built our multi-agent research system"* (June 2025), Anthropic reported the following on its internal research eval:
-  * A Claude Opus 4 lead agent with Claude Sonnet 4 subagents outperformed single-agent Opus 4 by **90.2%**.
-  * The cost is steep: agents used about **4×** the tokens of a chat interaction, and the multi-agent system about **15×**.
-  * In their BrowseComp analysis, token usage alone explained about **80%** of the performance variance.
+### Reality check (advanced): when orchestrator–workers pays off
+For breadth-first, read-heavy work, the evidence is favorable. In *"How we built our multi-agent research system"* (June 2025), Anthropic reported these results on its internal research eval:
+* A Claude Opus 4 lead agent with Claude Sonnet 4 subagents outperformed single-agent Opus 4 by 90.2%.
+* The cost is steep: agents used about 4× the tokens of a chat interaction, and the multi-agent system about 15×.
+* In their BrowseComp analysis, token usage alone explained about 80% of the performance variance.
 
-  Takeaway: much of the gain comes from spending more tokens in parallel. Reserve the pattern for high-value tasks.
-* **The counter-argument for write-heavy work:** Cognition's *"Don't Build Multi-Agents"* (Walden Yan, June 2025) shows how parallel workers with fragmented context make conflicting implicit decisions. Its prescription: share full context and traces, and keep consequential actions on a single thread.
-* **Practical rule:**
-  * Use orchestrator–workers freely for **read-only fan-out**: research, audits, log investigations, and per-region diagnostics.
-  * For **parallel writes** (multi-file refactors), give every worker the same written contract: interface signatures, naming, and error-handling conventions. Then run an **integration verification step** (full build + test suite) after the reduce. Alternatively, keep the writes on a single agent and parallelize only the analysis.
-  * Scale the fan-out to the task: simple questions should get 1 worker, not 10.
+So much of the gain comes from spending more tokens in parallel. Save the pattern for high-value tasks.
+
+Write-heavy work is a different story. Cognition's *"Don't Build Multi-Agents"* (Walden Yan, June 2025) shows how parallel workers with fragmented context end up making conflicting implicit decisions. Its prescription is to share full context and traces and keep consequential actions on a single thread.
+
+My rule of thumb follows from both:
+* Use orchestrator–workers freely for read-only fan-out: research, audits, log investigations, per-region diagnostics.
+* For parallel writes such as multi-file refactors, give every worker the same written contract (interface signatures, naming, error-handling conventions), then run an integration verification step (full build + test suite) after the reduce. Or keep the writes on a single agent and parallelize only the analysis.
+* Scale the fan-out to the task. A simple question should get 1 worker, not 10.
 
 ---
 
-## Pattern 3.2: Evaluator–Optimizer (Generator–Critic / Adversarial Loop)
-*Two distinct agents, a Builder (Generator) and an Adversarial Auditor (Evaluator), iterating in a loop with isolated context windows.*
+## Pattern 3.2: Evaluator–optimizer (generator and critic)
+*Two separate agents, a builder (generator) and an adversarial auditor (evaluator), iterate in a loop with isolated context windows.*
 
 ### Architecture
-Pattern 1.3 (Self-Refinement / Reflexion, Chapter 2) asks a single agent to critique its own work. **Evaluator–Optimizer** instead splits the **Generator Agent** and the **Evaluator (Critic) Agent** into two completely distinct agents, with:
-* **separate context windows**,
-* **opposing system personas**,
-* **asymmetric tool permissions**, and
-* often **different model families**.
+Pattern 1.3 (Self-Refinement / Reflexion, Chapter 2) asks one agent to critique its own work. Evaluator–optimizer splits that job between a **generator agent** and an **evaluator (critic) agent** that are fully separate. They have separate context windows, opposing system personas, and asymmetric tool permissions, and they often run on different model families.
 
 ```mermaid
 sequenceDiagram
@@ -144,17 +142,21 @@ sequenceDiagram
     end
 ```
 
-### Why This Architecture?
-* **Why use two separate agents instead of Single-Agent Self-Reflection (Pattern 1.3)?**
-  1. **Less Self-Confirmation Bias:** When a single LLM sees its own prior reasoning in the message history, it tends to defend its initial assumptions. A separate **Critic Agent** receives *only* the specification and the candidate artifact, in a clean context window.
-  2. **Asymmetric Least-Privilege Tools:** The Generator can be given code-writing or drafting tools, while the Critic is given read-only audit tools (`verify_log_timestamp`, `run_security_scanner`, `check_legal_clause`).
-  3. **Heterogeneous Model Auditing:** LLM judges show **self-preference bias**: they recognize and favor their own generations (Panickssery, Bowman & Feng, NeurIPS 2024). Running the Generator on one model family and the Critic on another (e.g., generate with a GPT-class model and audit with a Claude- or Gemini-class model, or with an open-weight Llama/Qwen/Mistral model) reduces both self-preference and correlated blind spots. It doesn't remove them.
-* **Ground the Critic, or it adds little:** *"Large Language Models Cannot Self-Correct Reasoning Yet"* (Huang et al., ICLR 2024) found that *intrinsic* self-correction often fails to improve reasoning, and can even degrade it. "Intrinsic" means the model revises its own answer without any external feedback. The Critic's real power comes from **external signals**: unit tests, compilers, schema validators, retrieval-backed citation checks, and policy engines. Run those deterministic checks first and hand their results to the Critic. Modern reasoning ("thinking") models already self-check internally, so an *ungrounded* same-model critique pass adds even less than it used to.
-* **Trade-offs & Failure Modes:**
-  * **Nitpicking Loop:** An overly pedantic Critic will reject every draft until `max_rounds` is exhausted, unless you set an explicit severity threshold (e.g., *"Approve if `blocking_defects == []`, even if minor style suggestions remain"*).
-  * **Oscillation:** Fixing defect A can reintroduce defect B. Pass the defect history to the Generator, and keep the best-scoring candidate as a fallback.
+### Why it works
+Why bother with two agents instead of single-agent self-reflection (Pattern 1.3)? There are three reasons.
 
-### Production-Grade Framework-Agnostic Pseudocode
+First, there's less self-confirmation bias. When an LLM sees its own earlier reasoning in the message history, it tends to defend its initial assumptions. A separate critic gets only the specification and the candidate artifact, in a clean context window.
+
+Second, you can give each side least-privilege tools. The generator gets code-writing or drafting tools; the critic gets read-only audit tools (`verify_log_timestamp`, `run_security_scanner`, `check_legal_clause`).
+
+Third, you can audit across model families. LLM judges show self-preference bias: they recognize and favor their own generations (Panickssery, Bowman & Feng, NeurIPS 2024). Running the generator on one model family and the critic on another (e.g., generate with a GPT-class model and audit with a Claude- or Gemini-class model, or with an open-weight Llama/Qwen/Mistral model) reduces both self-preference and correlated blind spots, though it doesn't remove them.
+
+> [!IMPORTANT]
+> Ground the critic, or it adds little. *"Large Language Models Cannot Self-Correct Reasoning Yet"* (Huang et al., ICLR 2024) found that intrinsic self-correction, where the model revises its own answer without any external feedback, often fails to improve reasoning and can even make it worse. A critic earns its keep from external signals: unit tests, compilers, schema validators, retrieval-backed citation checks, and policy engines. Run those deterministic checks first and hand the results to the critic. Modern reasoning ("thinking") models already self-check internally, so an ungrounded same-model critique pass adds even less than it used to.
+
+Watch for two failure modes. An overly pedantic critic will reject every draft until `max_rounds` runs out unless you set an explicit severity threshold (e.g., *"Approve if `blocking_defects == []`, even if minor style suggestions remain"*). And the loop can oscillate, with a fix for defect A reintroducing defect B. Pass the defect history to the generator and keep the best-scoring candidate as a fallback.
+
+### Framework-agnostic pseudocode
 ```python
 class AuditVerdict(BaseModel):
     blocking_defects: list[str]  # Empty list means APPROVED
@@ -185,22 +187,21 @@ def evaluator_optimizer(task_spec: str, max_rounds: int = 3) -> str:
     raise RuntimeError(f"Artifact failed Critic audit after {max_rounds} rounds.")
 ```
 
-> [!NOTE]
-> **Framework equivalents:** In LangGraph, this is a two-node cycle with a conditional edge back to the generator. Google ADK's `LoopAgent(sub_agents=[generator, critic], max_iterations=3)` runs this loop; the critic ends it early by calling an exit tool that sets `tool_context.actions.escalate = True`. In minimalist SDKs without a loop primitive (e.g., OpenAI Agents SDK, Claude Agent SDK), it is simply the plain loop above wrapped around two agent calls.
+In LangGraph, this is a two-node cycle with a conditional edge back to the generator. Google ADK's `LoopAgent(sub_agents=[generator, critic], max_iterations=3)` runs the loop, and the critic ends it early by calling an exit tool that sets `tool_context.actions.escalate = True`. Minimalist SDKs without a loop primitive (e.g., OpenAI Agents SDK, Claude Agent SDK) just use the plain loop above around two agent calls.
 
 ---
 
-## Pattern 3.3: Hierarchical Supervisor (Hub-and-Spoke & Multi-Level Trees)
-*A central Supervisor Agent acts as a dynamic project manager coordinating a team of domain-specialist sub-agents.*
+## Pattern 3.3: Hierarchical supervisor (hub-and-spoke and multi-level trees)
+*A central supervisor agent works as a dynamic project manager for a team of domain-specialist sub-agents.*
 
 ### Architecture
-In Chapter 3, application code hardcoded the order of specialists. Here, a **Supervisor Agent** owns the high-level orchestration loop instead. At each turn, the Supervisor:
+In Chapter 3, application code hardcoded the order of specialists. Here a supervisor agent owns the high-level orchestration loop instead. On each turn, the supervisor:
 1. Inspects the current state.
-2. Decides which **Specialist Sub-Agent** to invoke next.
+2. Decides which specialist sub-agent to call next.
 3. Evaluates that specialist's structured report.
-4. Either invokes another specialist or synthesizes the final response.
+4. Either calls another specialist or synthesizes the final response.
 
-For enterprise systems with $50\text{–}100+$ tools, this scales into a **Multi-Level Tree** (`Root Supervisor -> Team Supervisors -> Leaf Specialist Agents`).
+For enterprise systems with $50\text{–}100+$ tools, this grows into a multi-level tree (`Root Supervisor -> Team Supervisors -> Leaf Specialist Agents`).
 
 ```mermaid
 flowchart TD
@@ -215,25 +216,26 @@ flowchart TD
     BizSup <--> RefundAgent["Stripe Credit Leaf Agent<br/>(5 Tools)"]
 ```
 
-### Two Architectural Implementation Patterns for a Supervisor
+### Two ways to implement a supervisor
 
-| Implementation Style | How It Works | Pros | Cons |
+| Style | How it works | Pros | Cons |
 | :--- | :--- | :--- | :--- |
-| **1. Agents-as-Tools** | Each specialist sub-agent is wrapped as a callable tool (`call_infra_agent(task: str) -> str`). The Supervisor is simply a standard ReAct agent whose tools happen to be other agents. Examples: OpenAI Agents SDK `agent.as_tool(...)`, LangChain's "subagents as tools" approach, Google ADK `AgentTool(agent)`. | Can call several sub-agents in one turn (parallel tool calls); sub-agent's internal tool calls stay hidden from the Supervisor's context. | Sub-agent cannot easily talk directly to the end-user without passing back through the Supervisor; returns are usually text unless you enforce a schema. |
-| **2. State-Graph Router Node** | Supervisor is a graph node that inspects shared `State` and emits `next_node: Literal["infra", "billing", "FINISH"]`. In LangGraph 1.x, it does this via a conditional edge or by returning `Command(goto="infra", update={...})`. Every specialist node has a return edge back to `Supervisor`. | All nodes read/write a shared typed `State` object (avoiding lossy text summarization); easy to checkpoint and interrupt for HITL. | Requires explicit graph state definitions and reducers for concurrent writes. |
+| 1. Agents-as-tools | Each specialist sub-agent is wrapped as a callable tool (`call_infra_agent(task: str) -> str`). The supervisor is just a standard ReAct agent whose tools happen to be other agents. Examples: OpenAI Agents SDK `agent.as_tool(...)`, LangChain's "subagents as tools" approach, Google ADK `AgentTool(agent)`. | Can call several sub-agents in one turn (parallel tool calls); sub-agent's internal tool calls stay hidden from the supervisor's context. | Sub-agent cannot easily talk directly to the end-user without passing back through the supervisor; returns are usually text unless you enforce a schema. |
+| 2. State-graph router node | Supervisor is a graph node that inspects shared `State` and emits `next_node: Literal["infra", "billing", "FINISH"]`. In LangGraph 1.x, it does this via a conditional edge or by returning `Command(goto="infra", update={...})`. Every specialist node has a return edge back to `Supervisor`. | All nodes read/write a shared typed `State` object (avoiding lossy text summarization); easy to checkpoint and interrupt for HITL. | Requires explicit graph state definitions and reducers for concurrent writes. |
 
 > [!NOTE]
-> A third style, in which the supervisor **transfers control** to a specialist that then talks to the user directly, is a *handoff*. Examples: OpenAI Agents SDK `handoffs=[...]`, Microsoft Agent Framework's `HandoffBuilder`, and Google ADK's `sub_agents` with LLM-driven `transfer_to_agent`. Handoffs are covered as Pattern 4.1 in [Chapter 5](./chapter-05-decentralized-and-emergent-topologies.md). Rule of thumb: use **agents-as-tools** when the supervisor must keep ownership and synthesize, and use **handoffs** when the specialist should own the rest of the conversation.
+> There's a third style, a *handoff*, in which the supervisor transfers control to a specialist that then talks to the user directly. Examples include OpenAI Agents SDK `handoffs=[...]`, Microsoft Agent Framework's `HandoffBuilder`, and Google ADK's `sub_agents` with LLM-driven `transfer_to_agent`. Handoffs are Pattern 4.1 in [Chapter 5](./chapter-05-decentralized-and-emergent-topologies.md). As a rule of thumb, use agents-as-tools when the supervisor needs to keep ownership and synthesize, and use handoffs when the specialist should own the rest of the conversation.
 
-### Why This Architecture?
-* **Handles Emergent Cross-Domain Dependencies:** Suppose `InfraAgent` investigates a 503 error and finds the root cause wasn't a code bug at all. It was an **expired credit card that triggered an automatic quota suspension**. A hardcoded pipeline fails here. A **Supervisor** reads `InfraAgent`'s report and dynamically pivots to `BillingAgent`!
-* **Scales Past Tool Overload:** Group 80 tools into 10 leaf agents (8 tools each) under 3 team supervisors. Then no single LLM sees more than roughly 8–10 tools in its prompt. The trade-off is extra LLM hops (latency and cost) for every level you add, so prefer the shallowest tree that works.
-* **Critic's Fix — Defeating the "Telephone Game" (Lossy Summarization):**
-  * *The Trap:* In a 3-level hierarchy, a Leaf Agent returns free-text prose to a Mid-Level Supervisor, which re-summarizes it in prose for the Root Supervisor. Along the way, critical constraints, exact timestamps, or citations get lost or distorted (the "Telephone Game").
-  * *The Solution:* Combine Supervisor routing with a **Typed Shared State (Scratchpad)**. Leaf agents write structured facts (`state.verified_facts["downtime_mins"] = 42`) to the shared state, so the Root Supervisor reads exact values instead of paraphrases.
-  * *Caveat:* Structured state is only as good as what is written into it. Validate each update before merging: allow only the keys a specialist owns, check types and ranges, and record provenance (which agent, which tool call). Otherwise a hallucinated "fact" becomes lossless and authoritative.
+### Why it works
+A supervisor handles cross-domain dependencies that only emerge mid-task. Say `InfraAgent` investigates a 503 error and finds the root cause wasn't a code bug at all: an expired credit card triggered an automatic quota suspension. A hardcoded pipeline has nowhere to go. A supervisor reads `InfraAgent`'s report and pivots to `BillingAgent`.
 
-### Production-Grade Framework-Agnostic Pseudocode
+It also scales past tool overload. Group 80 tools into 10 leaf agents (8 tools each) under 3 team supervisors, and no single LLM sees more than roughly 8–10 tools in its prompt. Every level you add costs extra LLM hops in latency and money, so prefer the shallowest tree that works.
+
+The main hazard in deep trees is the "Telephone Game", or lossy summarization. In a 3-level hierarchy, a leaf agent returns free-text prose to a mid-level supervisor, which re-summarizes it in prose for the root supervisor. Along the way, important constraints, exact timestamps, or citations get dropped or distorted. The fix is to combine supervisor routing with a typed shared state (a scratchpad). Leaf agents write structured facts (`state.verified_facts["downtime_mins"] = 42`) to the shared state, and the root supervisor reads exact values instead of paraphrases.
+
+Structured state is only as good as what gets written into it, though. Validate each update before merging: allow only the keys a specialist owns, check types and ranges, and record provenance (which agent, which tool call). Otherwise a hallucinated "fact" just becomes lossless and authoritative.
+
+### Framework-agnostic pseudocode
 ```python
 class SharedIncidentState(BaseModel):
     user_query: str
@@ -269,14 +271,14 @@ def hierarchical_supervisor(query: str, specialists: dict, max_turns: int = 6) -
 
 ---
 
-## Chapter 4 Summary Comparison
+## Chapter 4 summary
 
-| Dynamic Pattern | Who Decides Topology at Runtime? | Concurrency Profile | Best Used When... | Critical Production Guardrail |
+| Pattern | Who decides topology at runtime | Concurrency | Use it when | Production guardrail |
 | :--- | :--- | :--- | :--- | :--- |
-| **3.1 Orchestrator–Workers** | Orchestrator LLM (Dynamic Map-Reduce) | High ($N$ parallel workers) | $N$ homogeneous or sliced sub-tasks are discovered at runtime (multi-region audit, broad research, multi-file analysis). | Schema `max_length` on subtasks + `asyncio.Semaphore(K)` + per-worker timeouts + token budget; shared contract + integration tests for parallel writes. |
-| **3.2 Evaluator–Optimizer** | Adversarial Critic LLM | Serial iterative loop | High-compliance or bug-free output needed where single-agent reflection suffers from confirmation bias. | Separate context window for Critic + grounded deterministic checks + explicit `blocking_defects` pass condition. |
-| **3.3 Hierarchical Supervisor** | Central Supervisor LLM | Serial or Parallel (agents-as-tools) | Multi-domain workflows ($>20\text{–}100$ tools) where Step 2's domain depends on Step 1's findings. | Validated, shared structured state to prevent "Telephone Game" information loss + `max_turns` cap. |
+| 3.1 Orchestrator–workers | Orchestrator LLM (dynamic map-reduce) | High ($N$ parallel workers) | $N$ homogeneous or sliced sub-tasks are discovered at runtime (multi-region audit, broad research, multi-file analysis). | Schema `max_length` on subtasks + `asyncio.Semaphore(K)` + per-worker timeouts + token budget; shared contract + integration tests for parallel writes. |
+| 3.2 Evaluator–optimizer | Adversarial critic LLM | Serial iterative loop | High-compliance or bug-free output needed where single-agent reflection suffers from confirmation bias. | Separate context window for critic + grounded deterministic checks + explicit `blocking_defects` pass condition. |
+| 3.3 Hierarchical supervisor | Central supervisor LLM | Serial or parallel (agents-as-tools) | Multi-domain workflows ($>20\text{–}100$ tools) where Step 2's domain depends on Step 1's findings. | Validated, shared structured state to prevent "Telephone Game" information loss + `max_turns` cap. |
 
 ---
 
-[⬅️ Previous: Chapter 3 — Deterministic Workflows](./chapter-03-deterministic-multi-agent-workflows.md) | [📚 Book Index](./README.md) | [Next: Chapter 5 — Decentralized & Emergent Topologies ➡️](./chapter-05-decentralized-and-emergent-topologies.md)
+[← Previous: Chapter 3 — Deterministic Workflows](./chapter-03-deterministic-multi-agent-workflows.md) | [Book Index](./README.md) | [Next: Chapter 5 — Decentralized & Emergent Topologies →](./chapter-05-decentralized-and-emergent-topologies.md)
