@@ -1,10 +1,81 @@
-# Chapter 7: Master Decision Matrix & Deep-Dive Framework Survey
+# Chapter 11: Production State, Durable HITL, Master Decision Matrix & Framework Survey
 
-[⬅️ Previous: Chapter 6 — Production Mechanics & Protocols](./chapter-06-production-mechanics-and-protocols.md) | [📚 Book Index](./README.md) | [Next: Chapter 8 — MCQ Assessment & Case Studies ➡️](./chapter-08-mcq-assessment-and-case-studies.md)
+[⬅️ Previous: Chapter 10 — Agentic Evaluation & Observability](./chapter-10-agentic-evaluation-and-observability.md) | [📚 Book Index](./README.md) | [Next: Chapter 12 — 50-MCQ Architectural Mastery Quiz ➡️](./chapter-12-mcq-assessment-and-case-studies.md)
 
 ---
 
-## 7.1 The Master Architecture Decision Tree
+This chapter synthesizes our orchestration topologies (Chapters 1–5) and capability pillars (Chapters 6–10) into production state management, durable Human-in-the-Loop (HITL) checkpointing, the **Master Architecture Decision Matrix**, and concrete code mappings across **Google ADK**, **LangGraph**, **CrewAI**, **Microsoft AutoGen / Agent Framework**, and **OpenAI Agents SDK**.
+
+---
+
+## 11.1 Context & State Passing Strategies Across Agents
+
+When Agent A transitions to Agent B, **what exact tokens should enter Agent B's context window?**
+
+| Strategy | Mechanism | Pros | Cons / Production Failure Mode |
+| :--- | :--- | :--- | :--- |
+| **1. Full History Broadcast** | Every agent reads and appends to a single shared `messages: list[Message]` transcript. | Zero setup; every agent sees everything. | **$O(K^2)$ Token Explosion & Attention Dilution:** Agent B gets confused by Agent A's internal tool calls and stack traces. |
+| **2. Scoped Task String (`AgentTool`)** | Supervisor passes Agent B a synthesized instruction string; Agent B returns only its final summary string. | Cleanest context isolation; Agent B's raw tool logs are garbage-collected on return. | **"Telephone Game":** Supervisor may forget to include a critical constraint when prompting Agent B. |
+| **3. Typed Shared State + Scoped Views + Artifact Pointers (Recommended)** | Agents read/write to a strongly-typed state schema (`IncidentState`). Each agent's prompt builder renders *only* the state keys relevant to its role, while large payloads are stored out-of-band by reference URI. | **Zero information loss + Zero context bloat.** | Requires explicit upfront schema design (`Pydantic` / `TypedDict`). |
+
+```mermaid
+flowchart LR
+    subgraph ArtifactStore["Out-of-Band Artifact Store (GCS / S3 / Redis)"]
+        Blob["blob://run_902/raw_503_logs.json\n(75,000 tokens)"]
+    end
+
+    subgraph SharedState["Typed Shared State (Lightweight In-Memory/Checkpointed Struct)"]
+        S1["ticket_id: 'INC-902'"]
+        S2["logs_uri: 'blob://run_902/raw_503_logs.json'"]
+        S3["root_cause: 'DB Pool Exhausted (Deploy #842)'"]
+        S4["downtime_mins: 42"]
+        S5["sla_eligible: False"]
+    end
+
+    SharedState -- "Scoped View:\nticket_id, logs_uri" --> Infra["Infra Agent"]
+    Infra <-- "Queries slice on demand" --> ArtifactStore
+    Infra -- "Writes:\nroot_cause, downtime_mins" --> SharedState
+    SharedState -- "Scoped View:\ndowntime_mins" --> Billing["Billing Agent"]
+    Billing -- "Writes:\nsla_eligible" --> SharedState
+```
+
+### Runtime Context Compaction (Preventing "Context Rot")
+Even within a single long-running agent session, prompts eventually approach context limits or suffer from middle-context attention degradation ("Context Rot"). Production orchestrators implement **three compaction strategies**:
+1. **Observation Truncation / Masking:** Replace old raw tool outputs (from $>3$ turns ago) with a placeholder (`"[Tool output archived to artifact://turn_2; summary: found 42m downtime]"`) while keeping the LLM's reasoning turns intact.
+2. **Rolling Summary Window:** Keep the system prompt + pinned facts + the most recent $M$ turns verbatim, while asynchronously summarizing turns $1 \dots (T - M)$ into a rolling `conversation_summary` block.
+3. **Sub-Agent Context Offloading:** Any exploratory sub-task that requires $>3$ tool calls is spawned as an isolated sub-agent so its working memory is reclaimed immediately upon returning its structured result.
+
+---
+
+## 11.2 Human-in-the-Loop (HITL), Durable Checkpointing & Time-Travel
+
+When an agentic workflow proposes a high-consequence action (issuing a \$5,000 refund, rolling back a production cluster, deleting customer data), you **cannot** block a Python thread with `input()` or `time.sleep()` waiting hours for a human in Slack.
+
+Production orchestrators implement **Durable Checkpointing & Interrupts**:
+
+```mermaid
+sequenceDiagram
+    participant Worker as Stateless Agent Worker
+    participant DB as Durable Checkpoint Store (Postgres / Spanner)
+    participant Queue as Event Notification (Slack / UI)
+    participant Human as Human Reviewer
+
+    Worker->>DB: Save Checkpoint #4 (Next Node: execute_refund($500))
+    Worker->>Queue: Emit Interrupt Event (thread_id="T-99", payload="$500 refund")
+    Note over Worker: Worker process exits cleanly!<br/>0 CPU / 0 RAM consumed while waiting hours or days.
+    Human->>DB: Submits Resume Command for "T-99" (Edits amount: $500 -> $250)
+    DB->>Worker: Spin up any stateless worker & rehydrate Checkpoint #4 + State Patch
+    Worker->>Worker: Execute execute_refund($250) & continue graph
+```
+
+### Three Standard HITL Primitives
+1. **Approve / Reject Gate:** Suspend execution immediately prior to a mutating tool call; resume on approval or inject a rejection observation so the agent can choose an alternative path.
+2. **Edit State & Resume:** Allow the human operator to modify tool arguments or shared state fields (e.g., editing a drafted email or changing a refund amount) before resuming from the checkpoint.
+3. **Time-Travel (Replay & Fork):** If an agent makes a bad decision at Step 5 of an 8-step trace, load Checkpoint #4 in a debugging UI, modify the state or prompt at Step 4, and fork a new execution branch from Step 4 without re-running Steps 1–3.
+
+---
+
+## 11.3 The Master Architecture Decision Tree
 
 Use this decision tree to select the simplest, most reliable orchestration pattern for any problem:
 
@@ -33,28 +104,28 @@ flowchart TD
 
 ---
 
-## 7.2 Master Pattern Comparison Matrix
+## 11.4 Master Pattern Comparison Matrix
 
 Let $L$ be the average latency of a single LLM call, $K$ be the number of loop iterations, and $M$ be the number of specialist agents:
 
 | Chapter & Level | Pattern | Control Flow Owner | Typical Latency | Token Cost Scaling | Context Isolation | Primary Failure Mode & Required Guardrail |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Ch 2: Beginner** | **1.1 ReAct Loop** | Single LLM | $K \cdot L$ | $O(K^2)$ (Shared window) | Low | **Myopia & Context Bloat:** Cap `max_steps`; return tool exceptions as observations. |
-| **Ch 2: Beginner** | **1.2 Plan-and-Execute** | Planner LLM + Code Loop | $(2 + K) \cdot L$ | $O(K)$ (Scoped steps) | High | **Stale Plan:** Always include a Replanner after each step summary. |
-| **Ch 2: Beginner** | **1.3 Grounded Reflexion** | Actor + Verifier Loop | $(1\text{–}3) \cdot 2L$ | $O(\text{trials})$ | Medium | **Sycophantic Flip-Flop:** Run deterministic verifiers (AST/tests/regex) before LLM critique. |
-| **Ch 3: Interm. I** | **2.1 Sequential Chain** | Application Code | $\sum_{i=1}^M L_i$ | $O(M)$ | High | **Compound Error Decay ($r^M$):** Insert deterministic `Pydantic`/business-rule gates between stages. |
-| **Ch 3: Interm. I** | **2.2 Parallelization** | Application Code | $\max_i(L_i) + L_{\text{synth}}$ | $O(M)$ | High | **Hidden Data Dependencies & Failure Cancellation:** Ensure true independence; use `return_exceptions=True`. |
-| **Ch 3: Interm. I** | **2.3 Intent Router** | Fast Classifier + Code | $L_{\text{fast}} + L_{\text{branch}}$ | **Lowest** ($O(1)$) | High | **Dropped Compound Intents:** Use multi-label `list[Intent]` schema to detect multi-part queries. |
-| **Ch 4: Interm. II** | **3.1 Orchestrator–Workers** | Orchestrator LLM | $2L + \max_i(L_{\text{worker}})$ | $O(N_{\text{workers}})$ | High | **Fan-Out Rate-Limit Bomb:** Enforce `max_length` on subtasks + `asyncio.Semaphore(K)`. |
-| **Ch 4: Interm. II** | **3.2 Evaluator–Optimizer** | Generator + Critic LLMs | $(1\text{–}3) \cdot 2L$ | $O(\text{rounds})$ | **High** (Clean Critic) | **Endless Nitpicking:** Separate `blocking_defects` from `minor_suggestions` in Critic schema. |
-| **Ch 4: Interm. II** | **3.3 Hierarchical Supervisor** | Central Supervisor LLM | $2K \cdot L$ (Hub hops) | $O(K \cdot M)$ | High | **"Telephone Game" Lossy Summaries:** Write structured facts directly to Typed Shared State. |
-| **Ch 5: Advanced** | **4.1 Peer Handoffs / Swarm** | Active Specialist LLM | **$1 \cdot L$ per turn** | $O(1)$ per turn | Medium | **Ping-Pong Handoff Cycle ($A \leftrightarrow B$):** Track `visited_edges` per turn + `max_handoffs`. |
-| **Ch 5: Advanced** | **4.2 Blackboard** | Event Controller + Board | $C_{\text{cycles}} \cdot \max(L_i)$ | $O(\text{triggers})$ | High | **Infinite Re-Triggering & Write Races:** Deduplicate `(agent, precondition_hash)` + atomic patch reducers. |
-| **Ch 5: Advanced** | **4.3 Multi-Agent Debate** | Debaters + Judge LLM | $(K_{\text{rounds}} + 1) \cdot L$ | **Highest** ($O(M \cdot K)$) | High | **Anchoring & Echo Chamber:** Enforce blind Round-1 parallel generation + orthogonal personas + early exit. |
+| **[Ch 02: Beginner](./chapter-02-single-agent-loops.md)** | **1.1 ReAct Loop** | Single LLM | $K \cdot L$ | $O(K^2)$ (Shared window) | Low | **Myopia & Context Bloat:** Cap `max_steps`; return tool exceptions as observations. |
+| **[Ch 02: Beginner](./chapter-02-single-agent-loops.md)** | **1.2 Plan-and-Execute** | Planner LLM + Code Loop | $(2 + K) \cdot L$ | $O(K)$ (Scoped steps) | High | **Stale Plan:** Always include a Replanner after each step summary. |
+| **[Ch 02: Beginner](./chapter-02-single-agent-loops.md)** | **1.3 Grounded Reflexion** | Actor + Verifier Loop | $(1\text{–}3) \cdot 2L$ | $O(\text{trials})$ | Medium | **Sycophantic Flip-Flop:** Run deterministic verifiers (AST/tests/regex) before LLM critique. |
+| **[Ch 03: Interm. I](./chapter-03-deterministic-multi-agent-workflows.md)** | **2.1 Sequential Chain** | Application Code | $\sum_{i=1}^M L_i$ | $O(M)$ | High | **Compound Error Decay ($r^M$):** Insert deterministic `Pydantic`/business-rule gates between stages. |
+| **[Ch 03: Interm. I](./chapter-03-deterministic-multi-agent-workflows.md)** | **2.2 Parallelization** | Application Code | $\max_i(L_i) + L_{\text{synth}}$ | $O(M)$ | High | **Hidden Data Dependencies & Failure Cancellation:** Ensure true independence; use `return_exceptions=True`. |
+| **[Ch 03: Interm. I](./chapter-03-deterministic-multi-agent-workflows.md)** | **2.3 Intent Router** | Fast Classifier + Code | $L_{\text{fast}} + L_{\text{branch}}$ | **Lowest** ($O(1)$) | High | **Dropped Compound Intents:** Use multi-label `list[Intent]` schema to detect multi-part queries. |
+| **[Ch 04: Interm. II](./chapter-04-dynamic-and-hierarchical-orchestration.md)** | **3.1 Orchestrator–Workers** | Orchestrator LLM | $2L + \max_i(L_{\text{worker}})$ | $O(N_{\text{workers}})$ | High | **Fan-Out Rate-Limit Bomb:** Enforce `max_length` on subtasks + `asyncio.Semaphore(K)`. |
+| **[Ch 04: Interm. II](./chapter-04-dynamic-and-hierarchical-orchestration.md)** | **3.2 Evaluator–Optimizer** | Generator + Critic LLMs | $(1\text{–}3) \cdot 2L$ | $O(\text{rounds})$ | **High** (Clean Critic) | **Endless Nitpicking:** Separate `blocking_defects` from `minor_suggestions` in Critic schema. |
+| **[Ch 04: Interm. II](./chapter-04-dynamic-and-hierarchical-orchestration.md)** | **3.3 Hierarchical Supervisor** | Central Supervisor LLM | $2K \cdot L$ (Hub hops) | $O(K \cdot M)$ | High | **"Telephone Game" Lossy Summaries:** Write structured facts directly to Typed Shared State. |
+| **[Ch 05: Advanced](./chapter-05-decentralized-and-emergent-topologies.md)** | **4.1 Peer Handoffs / Swarm** | Active Specialist LLM | **$1 \cdot L$ per turn** | $O(1)$ per turn | Medium | **Ping-Pong Handoff Cycle ($A \leftrightarrow B$):** Track `visited_edges` per turn + `max_handoffs`. |
+| **[Ch 05: Advanced](./chapter-05-decentralized-and-emergent-topologies.md)** | **4.2 Blackboard** | Event Controller + Board | $C_{\text{cycles}} \cdot \max(L_i)$ | $O(\text{triggers})$ | High | **Infinite Re-Triggering & Write Races:** Deduplicate `(agent, precondition_hash)` + atomic patch reducers. |
+| **[Ch 05: Advanced](./chapter-05-decentralized-and-emergent-topologies.md)** | **4.3 Multi-Agent Debate** | Debaters + Judge LLM | $(K_{\text{rounds}} + 1) \cdot L$ | **Highest** ($O(M \cdot K)$) | High | **Anchoring & Echo Chamber:** Enforce blind Round-1 parallel generation + orthogonal personas + early exit. |
 
 ---
 
-## 7.3 Deep-Dive Framework Survey: Mapping Concepts to Real Code Idioms
+## 11.5 Deep-Dive Framework Survey: Mapping Concepts to Real Code Idioms
 
 Once you understand the conceptual patterns, every major framework is simply a different ergonomic API over **Agents**, **Control Edges**, and **Shared State**. Below is how the top 5 frameworks implement these patterns in practice.
 
@@ -145,7 +216,7 @@ graph = builder.compile(checkpointer=postgres_checkpointer)
 ---
 
 ### 4. Microsoft AutoGen (AG2) & Microsoft Agent Framework
-* **Core Philosophy:** Asynchronous, event-driven multi-agent conversation topologies. (Note: Microsoft has unified **AutoGen** and **Semantic Kernel** into the **Microsoft Agent Framework**, while the open-source community also maintains **AG2**).
+* **Core Philosophy:** Asynchronous, event-driven multi-agent conversation topologies. (Microsoft has unified **AutoGen** and **Semantic Kernel** into the **Microsoft Agent Framework**, while the open-source community also maintains **AG2**).
 * **Key Architectural Idioms:**
   * `RoundRobinGroupChat` (Sequential / Debate loops),
   * `SelectorGroupChat` (Central Supervisor selecting next speaker),
@@ -162,7 +233,7 @@ graph = builder.compile(checkpointer=postgres_checkpointer)
 
 ---
 
-## 7.4 Summary: Which Framework Should You Pick?
+## 11.6 Summary: Which Framework Should You Pick?
 
 | Your Team's Primary Requirement | Recommended Framework | Why |
 | :--- | :--- | :--- |
@@ -174,4 +245,4 @@ graph = builder.compile(checkpointer=postgres_checkpointer)
 
 ---
 
-[⬅️ Previous: Chapter 6 — Production Mechanics & Protocols](./chapter-06-production-mechanics-and-protocols.md) | [📚 Book Index](./README.md) | [Next: Chapter 8 — MCQ Assessment & Case Studies ➡️](./chapter-08-mcq-assessment-and-case-studies.md)
+[⬅️ Previous: Chapter 10 — Agentic Evaluation & Observability](./chapter-10-agentic-evaluation-and-observability.md) | [📚 Book Index](./README.md) | [Next: Chapter 12 — 50-MCQ Architectural Mastery Quiz ➡️](./chapter-12-mcq-assessment-and-case-studies.md)

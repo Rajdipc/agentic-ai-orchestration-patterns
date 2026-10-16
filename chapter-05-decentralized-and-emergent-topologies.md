@@ -1,6 +1,6 @@
 # Chapter 5 (Advanced): Decentralized & Emergent Multi-Agent Topologies
 
-[⬅️ Previous: Chapter 4 — Dynamic & Hierarchical Orchestration](./chapter-04-dynamic-and-hierarchical-orchestration.md) | [📚 Book Index](./README.md) | [Next: Chapter 6 — Production Mechanics & Protocols ➡️](./chapter-06-production-mechanics-and-protocols.md)
+[⬅️ Previous: Chapter 4 — Dynamic & Hierarchical Orchestration](./chapter-04-dynamic-and-hierarchical-orchestration.md) | [📚 Book Index](./README.md) | [Next: Chapter 6 — Tool Calling & Action Engineering ➡️](./chapter-06-tool-calling-and-action-engineering.md)
 
 ---
 
@@ -243,4 +243,4 @@ async def multi_agent_debate(
 
 ---
 
-[⬅️ Previous: Chapter 4 — Dynamic & Hierarchical Orchestration](./chapter-04-dynamic-and-hierarchical-orchestration.md) | [📚 Book Index](./README.md) | [Next: Chapter 6 — Production Mechanics & Protocols ➡️](./chapter-06-production-mechanics-and-protocols.md)
+[⬅️ Previous: Chapter 4 — Dynamic & Hierarchical Orchestration](./chapter-04-dynamic-and-hierarchical-orchestration.md) | [📚 Book Index](./README.md) | [Next: Chapter 6 — Tool Calling & Action Engineering ➡️](./chapter-06-tool-calling-and-action-engineering.md)
